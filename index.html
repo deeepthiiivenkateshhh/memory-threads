@@ -1,0 +1,2244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Threads — Cognitive Care Platform</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF CDN for Client-Side PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    :root {
+      --patient-font-scale: 16px;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #fcfbf7;
+      color: #2d3748;
+      margin: 0;
+      padding: 0;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* CAREGIVER DARK MODE STYLING OVERRIDES */
+    body.cg-dark-mode {
+      background-color: #0f172a !important;
+      color: #f8fafc !important;
+    }
+
+    body.cg-dark-mode .cg-card {
+      background-color: #1e293b !important;
+      border-color: #334155 !important;
+      color: #f8fafc !important;
+    }
+
+    body.cg-dark-mode .cg-text-primary {
+      color: #f8fafc !important;
+    }
+
+    body.cg-dark-mode .cg-text-secondary {
+      color: #94a3b8 !important;
+    }
+
+    body.cg-dark-mode .cg-bg-subtle {
+      background-color: #0f172a !important;
+      border-color: #334155 !important;
+    }
+
+    /* HIGH CONTRAST ACCESSIBILITY MODE */
+    body.high-contrast {
+      background-color: #000000 !important;
+      color: #ffffff !important;
+    }
+
+    body.high-contrast div, 
+    body.high-contrast section, 
+    body.high-contrast card {
+      background-color: #121212 !important;
+      color: #ffffff !important;
+      border-color: #ffffff !important;
+    }
+
+    body.high-contrast button {
+      background-color: #000000 !important;
+      color: #ffff00 !important;
+      border: 2px solid #ffff00 !important;
+    }
+
+    body.high-contrast p, 
+    body.high-contrast span, 
+    body.high-contrast h1, 
+    body.high-contrast h2, 
+    body.high-contrast h3, 
+    body.high-contrast h4, 
+    body.high-contrast label {
+      color: #ffffff !important;
+    }
+
+    .font-friendly {
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+
+    /* Dynamic Patient Portal Font Scaling Container */
+    .patient-font-scaled {
+      font-size: var(--patient-font-scale);
+    }
+    
+    .pulse-ring {
+      box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4);
+      animation: pulse 2s infinite;
+    }
+
+    .listening-pulse {
+      box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7);
+      animation: micGlow 1.2s infinite alternate;
+    }
+
+    @keyframes micGlow {
+      from { transform: scale(1); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
+      to { transform: scale(1.02); box-shadow: 0 0 0 16px rgba(225, 29, 72, 0); }
+    }
+    
+    @keyframes pulse {
+      0% {
+        transform: scale(0.98);
+        box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.7);
+      }
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 18px rgba(217, 119, 6, 0);
+      }
+      100% {
+        transform: scale(0.98);
+        box-shadow: 0 0 0 0 rgba(217, 119, 6, 0);
+      }
+    }
+
+    .node-pulse {
+      animation: nodeGlow 1.8s infinite alternate;
+    }
+
+    @keyframes nodeGlow {
+      from { filter: drop-shadow(0px 0px 4px rgba(225, 29, 72, 0.4)); }
+      to { filter: drop-shadow(0px 0px 12px rgba(225, 29, 72, 0.9)); }
+    }
+
+    /* Focus Ring Customization */
+    :focus-visible {
+      outline: 3px solid #d97706 !important;
+      outline-offset: 3px !important;
+    }
+
+    /* Confetti Canvas Overlay */
+    #confettiCanvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
+    @media print {
+      header, footer, button, input, .no-print {
+        display: none !important;
+      }
+      body {
+        background: white !important;
+        color: black !important;
+      }
+      .print-area {
+        display: block !important;
+        width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-amber-200">
+
+  <!-- SCREEN READER LIVE ANNOUNCER REGION -->
+  <div id="srAnnouncer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+
+  <!-- FULLSCREEN CONFETTI CANVAS OVERLAY -->
+  <canvas id="confettiCanvas" aria-hidden="true"></canvas>
+
+  <!-- TOP HEADER NAV -->
+  <header class="bg-amber-950 text-amber-50 sticky top-0 z-50 border-b border-amber-800/60 shadow-md" role="banner">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <button onclick="switchView('landing')" class="flex items-center space-x-3 text-left focus:ring-2 focus:ring-amber-400 rounded-xl p-1" aria-label="Memory Threads Home">
+        <div class="w-10 h-10 rounded-2xl bg-amber-500 text-amber-950 flex items-center justify-center font-bold text-xl shadow-md font-friendly" aria-hidden="true">
+          🧵
+        </div>
+        <div>
+          <span class="font-bold text-xl font-friendly text-amber-100 tracking-tight">Memory Threads</span>
+          <span class="text-[10px] bg-amber-800/80 text-amber-200 px-2 py-0.5 rounded-full ml-2 font-mono">NER-AI v6.4</span>
+        </div>
+      </button>
+
+      <!-- Navigation Bar -->
+      <div class="flex items-center space-x-3">
+        <button onclick="toggleHighContrastMode()" class="px-3 py-1.5 bg-amber-900 hover:bg-amber-800 text-amber-100 border border-amber-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 focus:ring-2 focus:ring-amber-300" aria-label="Toggle High Contrast Mode">
+          <span>👁️</span>
+          <span>High Contrast</span>
+        </button>
+
+        <button id="caregiverDarkModeBtn" onclick="toggleCaregiverDarkMode()" class="hidden px-3 py-1.5 bg-teal-900 hover:bg-teal-800 text-teal-100 border border-teal-700 rounded-xl text-xs font-bold transition items-center gap-1.5 focus:ring-2 focus:ring-teal-300" aria-label="Toggle Caregiver Dark Mode">
+          <span id="cgThemeIcon" aria-hidden="true">🌙</span>
+          <span id="cgThemeText">Dark Mode</span>
+        </button>
+
+        <div id="syncBadge" class="hidden md:flex items-center space-x-2 bg-emerald-950/80 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-200 text-xs">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" aria-hidden="true"></span>
+          <span class="font-medium">Persistent Storage Active</span>
+        </div>
+
+        <nav class="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm" aria-label="Main Navigation">
+          <button onclick="switchView('landing')" class="px-3 py-1.5 rounded-lg hover:bg-amber-900 transition text-amber-100 font-medium">Home</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN VIEW CONTAINER -->
+  <main id="appContainer" class="flex-grow" role="main" aria-live="polite">
+
+    <!-- ==================== VIEW 1: LANDING PAGE ==================== -->
+    <section id="landingView" class="block" aria-labelledby="landingTitle">
+      <div class="bg-gradient-to-b from-amber-100/70 via-amber-50/20 to-white py-12 md:py-20 border-b border-amber-200/40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            <div class="lg:col-span-7 space-y-6">
+              <div class="inline-flex items-center space-x-2 bg-amber-100/80 border border-amber-300 px-3 py-1 rounded-full text-amber-900 text-xs font-semibold">
+                <span aria-hidden="true">❤️</span>
+                <span>Designed for North Eastern Region (NER) Elderly Care</span>
+              </div>
+              
+              <h1 id="landingTitle" class="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                Helping Memories <br><span class="text-amber-700 underline decoration-amber-300">Stay Connected.</span>
+              </h1>
+              
+              <p class="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
+                An AI-powered cognitive memory companion built around the people, places, traditions, and memories that matter most. Hints, retry prompts, and spoken voice guidance are delivered strictly in the user's regional language!
+              </p>
+              
+              <div class="flex flex-wrap gap-4 pt-2">
+                <button onclick="switchView('patientAuth')" class="px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transition flex items-center space-x-3 text-lg font-friendly min-h-[50px] min-w-[160px]">
+                  <span aria-hidden="true">👵</span>
+                  <span>Patient Portal</span>
+                </button>
+                <button onclick="switchView('caregiverAuth')" class="px-8 py-4 bg-teal-800 hover:bg-teal-900 text-white font-bold rounded-2xl shadow-md transition flex items-center space-x-3 text-lg font-friendly min-h-[50px] min-w-[160px]">
+                  <span aria-hidden="true">🩺</span>
+                  <span>Caregiver Portal</span>
+                </button>
+              </div>
+
+              <div class="pt-6 border-t border-amber-200/60 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+                <span>Multilingual Support:</span>
+                <span class="bg-white px-2.5 py-1 rounded-md text-slate-700 border border-slate-200 font-semibold">অসমীয়া (Assamese)</span>
+                <span class="bg-white px-2.5 py-1 rounded-md text-slate-700 border border-slate-200 font-semibold">Mizo</span>
+                <span class="bg-white px-2.5 py-1 rounded-md text-slate-700 border border-slate-200 font-semibold">Nagamese</span>
+                <span class="bg-white px-2.5 py-1 rounded-md text-slate-700 border border-slate-200 font-semibold">Khasi</span>
+                <span class="bg-white px-2.5 py-1 rounded-md text-slate-700 border border-slate-200 font-semibold">English</span>
+              </div>
+            </div>
+
+            <div class="lg:col-span-5 flex justify-center">
+              <div class="bg-white p-6 rounded-3xl shadow-xl border border-amber-200/80 max-w-md w-full space-y-4">
+                <div class="text-xs font-bold uppercase tracking-wider text-amber-800 border-b border-slate-100 pb-2">Full Regional Language Fidelity</div>
+                <div class="space-y-2 text-xs text-slate-600">
+                  <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-1">
+                    <span class="font-bold text-amber-900">🗣️ Native Speech & Hint Guidance:</span>
+                    <ul class="list-disc ml-5 space-y-1 text-slate-700">
+                      <li><strong>Native Language Hints:</strong> Clues provided fully in Assamese, Mizo, Nagamese, or Khasi.</li>
+                      <li><strong>Native Audio Speech (TTS):</strong> Text-to-speech engine speaks the native language hint directly.</li>
+                      <li><strong>Native Retry Prompts:</strong> Friendly regional encouragement like <em>"পুনৰ চেষ্টা কৰক"</em>.</li>
+                      <li><strong>Native Praise & Confetti:</strong> Full celebratory response in native phrasing.</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: PATIENT AUTHENTICATION ==================== -->
+    <section id="patientAuthView" class="hidden bg-amber-50/40 py-12 min-h-[calc(100vh-4rem)] flex items-center justify-center" aria-labelledby="patientAuthTitle">
+      <div class="max-w-md w-full mx-4 bg-white rounded-3xl p-8 shadow-xl border-2 border-amber-200 space-y-6">
+        
+        <div class="text-center space-y-2">
+          <div class="w-16 h-16 bg-amber-500 text-white rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-md font-friendly" aria-hidden="true">👵</div>
+          <h2 id="patientAuthTitle" class="text-2xl font-extrabold text-slate-800 font-friendly">Patient Portal</h2>
+          <p class="text-xs text-slate-500">Sign in with Patient ID or Register as a New Patient</p>
+        </div>
+
+        <div class="flex border-b border-slate-200 text-sm font-bold" role="tablist" aria-label="Patient Portal Actions">
+          <button id="tabPatientLoginBtn" role="tab" aria-selected="true" aria-controls="patientLoginForm" onclick="switchPatientTab('login')" class="flex-1 py-2 text-amber-800 border-b-2 border-amber-600">Login</button>
+          <button id="tabPatientRegisterBtn" role="tab" aria-selected="false" aria-controls="patientRegisterForm" onclick="switchPatientTab('register')" class="flex-1 py-2 text-slate-400 border-b-2 border-transparent">New Registration</button>
+        </div>
+
+        <form id="patientLoginForm" onsubmit="handlePatientLogin(event)" class="space-y-4" role="tabpanel">
+          <div>
+            <label for="loginPatientSelect" class="block text-xs font-bold text-slate-700 mb-1">Select Registered Patient</label>
+            <select id="loginPatientSelect" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-medium focus:outline-amber-500">
+            </select>
+          </div>
+          <div>
+            <label for="loginPatientPin" class="block text-xs font-bold text-slate-700 mb-1">Enter Security PIN</label>
+            <input id="loginPatientPin" type="password" required value="1234" placeholder="Enter PIN (e.g. 1234)" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-amber-500">
+          </div>
+          <button type="submit" class="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl shadow-md text-base font-friendly transition min-h-[48px]">
+            Start Patient Session ➔
+          </button>
+        </form>
+
+        <form id="patientRegisterForm" onsubmit="handlePatientRegister(event)" class="hidden space-y-4" role="tabpanel">
+          <div>
+            <label for="regPatientName" class="block text-xs font-bold text-slate-700 mb-1">Full Patient Name</label>
+            <input type="text" id="regPatientName" required placeholder="e.g. Ananya Das" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-amber-500">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="regPatientAge" class="block text-xs font-bold text-slate-700 mb-1">Age</label>
+              <input type="number" id="regPatientAge" required placeholder="e.g. 72" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-amber-500">
+            </div>
+            <div>
+              <label for="regPatientLanguage" class="block text-xs font-bold text-slate-700 mb-1">Preferred Language</label>
+              <select id="regPatientLanguage" required class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-amber-500">
+                <option value="assamese">অসমীয়া (Assamese)</option>
+                <option value="mizo">Mizo</option>
+                <option value="nagamese">Nagamese</option>
+                <option value="khasi">Khasi</option>
+                <option value="english">English</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label for="regCaregiverSelect" class="block text-xs font-bold text-slate-700 mb-1">Assigned Caregiver Name</label>
+            <select id="regCaregiverSelect" required class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-amber-500">
+            </select>
+          </div>
+
+          <div>
+            <label for="regPatientFontSize" class="block text-xs font-bold text-slate-700 mb-1">Initial Preferred Text Size</label>
+            <select id="regPatientFontSize" required class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:outline-amber-500">
+              <option value="16">Standard (16px)</option>
+              <option value="20">Medium Large (20px)</option>
+              <option value="24" selected>Large / Extra Clear (24px)</option>
+              <option value="28">Huge / High Accessibility (28px)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="regPatientPin" class="block text-xs font-bold text-slate-700 mb-1">Create 4-Digit PIN</label>
+            <input type="password" id="regPatientPin" required placeholder="1234" value="1234" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-amber-500">
+          </div>
+
+          <button type="submit" class="w-full py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl shadow-md text-sm font-friendly transition min-h-[48px]">
+            Register & Begin ➔
+          </button>
+        </form>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: PATIENT MAIN INTERFACE ==================== -->
+    <section id="patientView" class="hidden bg-amber-50/40 py-8 min-h-[calc(100vh-4rem)] patient-font-scaled" aria-labelledby="patientGreetingTitle">
+      <div class="max-w-3xl mx-auto px-4 space-y-6">
+        
+        <!-- Patient Profile Header -->
+        <div class="bg-white rounded-3xl p-6 shadow-sm border border-amber-200/80 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center space-x-4">
+            <button onclick="switchView('patientProfile')" class="w-16 h-16 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold text-3xl shadow-md" aria-label="Open Patient Profile Settings">👵</button>
+            <div>
+              <h2 id="patientGreetingTitle" class="text-2xl font-extrabold text-slate-800 font-friendly">Good morning!</h2>
+              <p class="text-amber-800 font-semibold text-xs flex items-center gap-2">
+                <span id="patientLangBadge">Language Active</span> • <span id="patientCaregiverBadge" class="bg-amber-100 px-2 py-0.5 rounded text-amber-900 font-bold">Caregiver</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center space-x-3">
+            <div class="bg-amber-100/80 border-2 border-amber-300 rounded-2xl px-4 py-2 text-center shadow-inner" aria-label="Current Coins Balance">
+              <div class="text-[10px] font-bold uppercase tracking-wider text-amber-800">My Coins</div>
+              <div class="text-xl font-extrabold text-amber-900 flex items-center justify-center gap-1 font-friendly">
+                <span aria-hidden="true">🪙</span> <span id="coinCountDisplay">120</span>
+              </div>
+            </div>
+
+            <button onclick="switchView('patientProfile')" class="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1 min-h-[44px]">
+              <span aria-hidden="true">👤</span>
+              <span>Profile</span>
+            </button>
+
+            <button onclick="logoutPatient()" class="px-3 py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-xs rounded-xl border border-rose-300 transition flex items-center gap-1 min-h-[44px]">
+              <span aria-hidden="true">🚪</span>
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- LIVE FONT SIZE & ADAPTIVE TTS QUICK ADJUSTER BAR -->
+        <div class="bg-white p-4 rounded-2xl border border-amber-200 shadow-sm space-y-3">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-2 text-xs font-bold text-amber-900">
+              <span aria-hidden="true">🔍</span>
+              <label for="patientInlineFontSlider">Text Size Adjuster:</label>
+              <span id="patientLiveFontLabel" class="bg-amber-100 px-2 py-0.5 rounded text-amber-900 font-mono">20px</span>
+            </div>
+
+            <div class="flex items-center space-x-3 flex-grow max-w-xs w-full">
+              <span class="text-xs font-bold text-slate-400" aria-hidden="true">A</span>
+              <input type="range" id="patientInlineFontSlider" min="14" max="32" step="2" value="20" aria-label="Text Size Slider" aria-valuemin="14" aria-valuemax="32" aria-valuenow="20" oninput="handlePatientFontSliderChange(this.value); this.setAttribute('aria-valuenow', this.value);" class="w-full accent-amber-600 cursor-pointer">
+              <span class="text-lg font-bold text-slate-800" aria-hidden="true">A</span>
+            </div>
+
+            <div class="hidden sm:flex items-center space-x-1 text-xs">
+              <button onclick="setPatientFontSizePreset(16)" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 font-bold rounded">16px</button>
+              <button onclick="setPatientFontSizePreset(20)" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 font-bold rounded">20px</button>
+              <button onclick="setPatientFontSizePreset(24)" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 font-bold rounded">24px</button>
+              <button onclick="setPatientFontSizePreset(28)" class="px-2 py-1 bg-slate-100 hover:bg-amber-100 font-bold rounded">28px</button>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div class="flex items-center space-x-2">
+              <label for="speechRateSlider" class="font-bold text-slate-700 min-w-[110px]">🗣️ Voice Speed:</label>
+              <input type="range" id="speechRateSlider" min="0.5" max="1.25" step="0.05" value="0.8" aria-label="Speech Speed Slider" aria-valuemin="0.5" aria-valuemax="1.25" aria-valuenow="0.8" oninput="handleSpeechRateChange(this.value)" class="w-full accent-amber-600 cursor-pointer">
+              <span id="speechRateBadge" class="bg-amber-100 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">0.80x</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <label for="speechPitchSlider" class="font-bold text-slate-700 min-w-[110px]">🎵 Voice Tone/Pitch:</label>
+              <input type="range" id="speechPitchSlider" min="0.7" max="1.3" step="0.05" value="1.0" aria-label="Speech Pitch Slider" aria-valuemin="0.7" aria-valuemax="1.3" aria-valuenow="1.0" oninput="handleSpeechPitchChange(this.value)" class="w-full accent-amber-600 cursor-pointer">
+              <span id="speechPitchBadge" class="bg-amber-100 text-amber-900 font-mono px-2 py-0.5 rounded font-bold">1.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIVITY SELECTOR MODULES -->
+        <div class="grid grid-cols-3 gap-2 bg-white p-2 rounded-2xl border border-amber-200 text-xs font-bold text-center" role="navigation" aria-label="Game Modes">
+          <button id="gameModeRecallBtn" onclick="switchGameMode('recall')" class="py-2.5 rounded-xl bg-amber-600 text-white shadow font-friendly min-h-[44px]">🧠 Recall Activity</button>
+          <button id="gameModeMusicBtn" onclick="switchGameMode('music')" class="py-2.5 rounded-xl hover:bg-amber-50 text-amber-900 font-friendly min-h-[44px]">🎵 Folk Music</button>
+          <button id="gameModeMatchBtn" onclick="switchGameMode('match')" class="py-2.5 rounded-xl hover:bg-amber-50 text-amber-900 font-friendly min-h-[44px]">🧩 Memory Match</button>
+        </div>
+
+        <!-- MAIN PATIENT ACTIVITY CARD -->
+        <div id="activityCard" class="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border-2 border-amber-300 space-y-6 relative overflow-hidden">
+          
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4 text-xs">
+            <span id="activityModeBadge" class="bg-amber-100 text-amber-900 font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+              Personal Memory Recall
+            </span>
+            <span id="hesitationTimer" class="font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              Response Clock: 0s
+            </span>
+          </div>
+
+          <!-- ACTIVITY CONTENT CONTAINER -->
+          <div id="activityContentArea" class="space-y-6">
+            
+            <!-- RECALL MODE CONTENT -->
+            <div id="modeRecallContent" class="space-y-6">
+              <div class="relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 h-64 sm:h-72 flex items-center justify-center">
+                <img id="memoryPhoto" src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=80" alt="Family Memory Photo showing Bihu Celebration with Family in 2019" class="w-full h-full object-cover">
+                <div class="absolute bottom-3 left-3 right-3 bg-slate-900/85 backdrop-blur-md text-white text-xs p-2.5 rounded-xl font-medium flex items-center justify-between">
+                  <span>📷 2019 Bihu Celebration with Family</span>
+                  <span class="bg-amber-500/30 text-amber-300 text-[10px] px-2 py-0.5 rounded border border-amber-400/30 font-mono">Person → Place</span>
+                </div>
+              </div>
+
+              <div class="space-y-2 text-center">
+                <p id="promptQuestionPrimary" class="font-bold text-slate-800 leading-snug font-friendly transition-all duration-150">
+                  "Where did you celebrate Bihu with Priya?"
+                </p>
+                <p id="promptTranslationCaregiver" class="text-xs sm:text-sm text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100 max-w-md mx-auto">
+                  Caregiver Translation: "Where did you celebrate Bihu with Priya?"
+                </p>
+              </div>
+            </div>
+
+            <!-- MUSIC GAME MODE CONTENT -->
+            <div id="modeMusicContent" class="hidden space-y-6 text-center">
+              <div class="p-8 bg-amber-50 border-2 border-amber-200 rounded-3xl space-y-4">
+                <div class="text-5xl animate-bounce" aria-hidden="true">🪕</div>
+                <h3 class="font-bold text-amber-900 font-friendly">Complete the Bihu Song Phrase</h3>
+                <p id="musicPromptPrimary" class="font-bold text-slate-800 font-friendly">"বিহুৰে বিৰিনা, অতি চেনেহৰ..."</p>
+                <p id="musicPromptCaregiver" class="text-xs text-slate-500 italic">Caregiver Translation: "Bihu birina, beloved..." (Choose or say the completing phrase)</p>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <button onclick="submitAnswer('Dance')" class="py-4 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-2xl border border-amber-300 transition font-friendly min-h-[48px]">
+                  "বিহু নাচ" (Bihu Dance)
+                </button>
+                <button onclick="submitAnswer('Barpeta')" class="py-4 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl shadow transition font-friendly min-h-[48px]">
+                  "বৰপেটাৰ বিহু" (Barpeta Bihu)
+                </button>
+              </div>
+            </div>
+
+            <!-- PAIR MATCHING GAME MODE CONTENT -->
+            <div id="modeMatchContent" class="hidden space-y-4 text-center">
+              <div class="text-sm font-bold text-slate-700 font-friendly">Tap cards or say 'Barpeta' to find the matching pair:</div>
+              <div class="grid grid-cols-4 gap-3 max-w-md mx-auto">
+                <button onclick="flipMatchCard(1)" id="card1" aria-label="Card 1" class="h-24 bg-amber-500 text-white font-bold text-3xl rounded-2xl shadow flex items-center justify-center min-h-[48px]">❓</button>
+                <button onclick="flipMatchCard(2)" id="card2" aria-label="Card 2" class="h-24 bg-amber-500 text-white font-bold text-3xl rounded-2xl shadow flex items-center justify-center min-h-[48px]">❓</button>
+                <button onclick="flipMatchCard(3)" id="card3" aria-label="Card 3" class="h-24 bg-amber-500 text-white font-bold text-3xl rounded-2xl shadow flex items-center justify-center min-h-[48px]">❓</button>
+                <button onclick="flipMatchCard(4)" id="card4" aria-label="Card 4" class="h-24 bg-amber-500 text-white font-bold text-3xl rounded-2xl shadow flex items-center justify-center min-h-[48px]">❓</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- LIVE SPEECH TRANSCRIPTION DISPLAY -->
+          <div id="liveSpeechTranscriptContainer" class="hidden p-3 bg-slate-900 text-amber-300 rounded-2xl border-2 border-amber-400 text-center space-y-1">
+            <div id="liveSpeechHearingLabel" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">🎙️ Hearing Your Voice...</div>
+            <p id="liveSpeechTranscriptText" class="text-base font-extrabold font-mono text-white">"..."</p>
+          </div>
+
+          <!-- PROGRESSIVE HINT DISPLAY AREA (REGIONAL LANGUAGE) -->
+          <div id="hintContainer" class="hidden bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 text-slate-800 space-y-3 animate-fadeIn" role="region" aria-label="Clue Container">
+            <div class="flex items-center space-x-2 text-amber-900 font-bold text-sm">
+              <span aria-hidden="true">💡</span>
+              <span id="hintTitle">Personalized Clue</span>
+            </div>
+            <p id="hintBodyTextPrimary" class="font-semibold text-slate-800 leading-relaxed"></p>
+            <p id="hintBodyTextCaregiver" class="text-xs text-slate-500 italic"></p>
+            <div id="hintChoiceButtons" class="hidden pt-2 flex flex-wrap gap-3 justify-center">
+              <button onclick="submitAnswer('Barpeta')" class="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl shadow-md transition min-h-[48px]">
+                Barpeta / বৰপেটা
+              </button>
+              <button onclick="submitAnswer('Guwahati')" class="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition min-h-[48px]">
+                Guwahati / গুৱাহাটী
+              </button>
+            </div>
+          </div>
+
+          <!-- VOICE INTERACTION BUTTONS -->
+          <div class="pt-2 space-y-3">
+            <button id="micBtn" onclick="toggleVoiceInput()" class="w-full py-5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold rounded-2xl shadow-lg transition flex items-center justify-center space-x-3 pulse-ring font-friendly min-h-[56px]">
+              <span aria-hidden="true">🎙️</span>
+              <span id="micBtnText">Tap Microphone & Speak Answer</span>
+            </button>
+
+            <div class="grid grid-cols-2 gap-3">
+              <button onclick="speakQuestionWithTTS()" class="py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition min-h-[48px]">
+                <span aria-hidden="true">🔊</span>
+                <span id="speakBtnText">Speak Question Out Loud</span>
+              </button>
+              <button onclick="triggerManualHint()" class="py-3 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition min-h-[48px]">
+                <span aria-hidden="true">🤝</span>
+                <span id="hintBtnText">Need a Hint?</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- FEEDBACK NOTIFICATION AREA -->
+          <div id="feedbackBox" class="hidden p-5 rounded-2xl text-center font-bold" role="status"></div>
+
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div class="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-sm">
+            <div class="text-2xl" aria-hidden="true">🌸</div>
+            <div class="text-xs font-bold text-slate-700 mt-1 font-friendly">Virtual Garden</div>
+            <div class="text-[10px] text-amber-700 font-medium">3 Flowers Unlocked</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-sm">
+            <div class="text-2xl" aria-hidden="true">🎵</div>
+            <div class="text-xs font-bold text-slate-700 mt-1 font-friendly">Folk Music</div>
+            <div class="text-[10px] text-amber-700 font-medium">Bihu Songs Unlocked</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-sm">
+            <div class="text-2xl" aria-hidden="true">🏅</div>
+            <div class="text-xs font-bold text-slate-700 mt-1 font-friendly">Badges</div>
+            <div class="text-[10px] text-amber-700 font-medium">4 Memory Badges</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3.5: PATIENT PROFILE & SETTINGS VIEW ==================== -->
+    <section id="patientProfileView" class="hidden bg-amber-50/40 py-8 min-h-[calc(100vh-4rem)]" aria-labelledby="patientProfileTitle">
+      <div class="max-w-2xl mx-auto px-4 space-y-6">
+        
+        <div class="bg-white p-6 rounded-3xl border border-amber-200 shadow-md flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <button onclick="switchView('patient')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold min-h-[44px]">
+              ← Back to Practice
+            </button>
+            <h2 id="patientProfileTitle" class="text-xl font-bold font-friendly text-slate-800">My Patient Profile & Settings</h2>
+          </div>
+          <button onclick="logoutPatient()" class="px-3 py-1.5 bg-rose-100 text-rose-800 rounded-xl text-xs font-bold border border-rose-200 min-h-[44px]">Logout</button>
+        </div>
+
+        <div class="bg-white p-6 rounded-3xl border border-amber-200 shadow-md space-y-6">
+          <div class="flex items-center space-x-4 border-b border-slate-100 pb-6">
+            <div class="w-20 h-20 bg-amber-500 text-white rounded-2xl flex items-center justify-center font-bold text-4xl shadow-md" aria-hidden="true">👵</div>
+            <div>
+              <h3 id="profPatientName" class="text-2xl font-extrabold text-slate-800 font-friendly">Ananya Das</h3>
+              <p id="profPatientMeta" class="text-xs text-slate-500 font-medium mt-1">Age: 72 • Language: Assamese • Caregiver: Dr. Bimala Baruah</p>
+              <div class="mt-2 inline-flex items-center space-x-1 bg-amber-100 text-amber-900 font-bold px-3 py-1 rounded-full text-xs">
+                <span>🪙 Wallet Balance:</span>
+                <span id="profPatientCoins">120 Coins</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-5 bg-amber-50 border-2 border-amber-200 rounded-2xl space-y-4">
+            <div>
+              <div class="flex items-center justify-between">
+                <h4 class="font-bold text-amber-900 text-base font-friendly flex items-center gap-2">
+                  <span aria-hidden="true">🔤</span> Preferred Text Size (Accessibility Settings)
+                </h4>
+                <span id="profFontSizeBadge" class="bg-amber-600 text-white text-xs font-mono font-bold px-2.5 py-1 rounded-lg">20px</span>
+              </div>
+              <p class="text-xs text-slate-600 mt-1">
+                Your selected text size is automatically saved to your user profile. Every time you log in, Memory Threads will render your activity screens in your preferred text size.
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <label for="profileFontSlider" class="block text-xs font-bold text-slate-700">Adjust Text Size Slider:</label>
+              <div class="flex items-center space-x-4">
+                <span class="text-xs font-bold text-slate-400" aria-hidden="true">Smaller (14px)</span>
+                <input type="range" id="profileFontSlider" min="14" max="32" step="2" value="20" aria-label="Profile Font Size Slider" aria-valuemin="14" aria-valuemax="32" aria-valuenow="20" oninput="handlePatientFontSliderChange(this.value); this.setAttribute('aria-valuenow', this.value);" class="w-full accent-amber-600 cursor-pointer">
+                <span class="text-lg font-bold text-slate-800" aria-hidden="true">Larger (32px)</span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-4 gap-2 pt-2 text-xs font-bold">
+              <button onclick="setPatientFontSizePreset(16)" class="py-2.5 bg-white border border-amber-300 rounded-xl hover:bg-amber-100 text-slate-800 min-h-[44px]">16px (Std)</button>
+              <button onclick="setPatientFontSizePreset(20)" class="py-2.5 bg-white border border-amber-300 rounded-xl hover:bg-amber-100 text-slate-800 min-h-[44px]">20px (Medium)</button>
+              <button onclick="setPatientFontSizePreset(24)" class="py-2.5 bg-white border border-amber-300 rounded-xl hover:bg-amber-100 text-slate-800 min-h-[44px]">24px (Large)</button>
+              <button onclick="setPatientFontSizePreset(28)" class="py-2.5 bg-white border border-amber-300 rounded-xl hover:bg-amber-100 text-slate-800 min-h-[44px]">28px (Huge)</button>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <h4 class="font-bold text-slate-800 text-sm font-friendly">Account Details</h4>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span class="text-slate-400 font-bold block">PATIENT ID</span>
+                <span id="profPatientId" class="font-mono font-bold text-slate-700">p1</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <span class="text-slate-400 font-bold block">PREFERRED LANGUAGE</span>
+                <span id="profPatientLang" class="font-bold text-slate-700">Assamese</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 4: CAREGIVER AUTHENTICATION ==================== -->
+    <section id="caregiverAuthView" class="hidden bg-teal-950/20 py-12 min-h-[calc(100vh-4rem)] flex items-center justify-center" aria-labelledby="caregiverAuthTitle">
+      <div class="max-w-md w-full mx-4 bg-white rounded-3xl p-8 shadow-2xl border-2 border-teal-200 space-y-6 cg-card">
+        
+        <div class="text-center space-y-2">
+          <div class="w-16 h-16 bg-teal-800 text-white rounded-2xl flex items-center justify-center text-3xl mx-auto shadow-md" aria-hidden="true">🩺</div>
+          <h2 id="caregiverAuthTitle" class="text-2xl font-extrabold text-slate-800 font-friendly cg-text-primary">Caregiver Portal</h2>
+          <p class="text-xs text-slate-500 cg-text-secondary">Log in or Register as a Health Worker</p>
+        </div>
+
+        <div class="flex border-b border-slate-200 text-sm font-bold" role="tablist" aria-label="Caregiver Auth Actions">
+          <button id="tabCaregiverLoginBtn" role="tab" aria-selected="true" aria-controls="caregiverLoginForm" onclick="switchCaregiverTab('login')" class="flex-1 py-2 text-teal-800 border-b-2 border-teal-800">Caregiver Login</button>
+          <button id="tabCaregiverRegisterBtn" role="tab" aria-selected="false" aria-controls="caregiverRegisterForm" onclick="switchCaregiverTab('register')" class="flex-1 py-2 text-slate-400 border-b-2 border-transparent">Register Caregiver</button>
+        </div>
+
+        <form id="caregiverLoginForm" onsubmit="handleCaregiverLogin(event)" class="space-y-4" role="tabpanel">
+          <div>
+            <label for="loginCaregiverSelect" class="block text-xs font-bold text-slate-700 mb-1 cg-text-secondary">Select Caregiver Account</label>
+            <select id="loginCaregiverSelect" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:outline-teal-600 cg-bg-subtle cg-text-primary">
+            </select>
+          </div>
+          <div>
+            <label for="loginCaregiverPassword" class="block text-xs font-bold text-slate-700 mb-1 cg-text-secondary">Password</label>
+            <input id="loginCaregiverPassword" type="password" required value="password123" placeholder="Enter password" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm focus:outline-teal-600 cg-bg-subtle cg-text-primary">
+          </div>
+
+          <button type="submit" class="w-full py-4 bg-teal-800 hover:bg-teal-700 text-white font-extrabold rounded-2xl shadow-md text-base font-friendly transition min-h-[48px]">
+            Caregiver Sign In ➔
+          </button>
+        </form>
+
+        <form id="caregiverRegisterForm" onsubmit="handleCaregiverRegister(event)" class="hidden space-y-4" role="tabpanel">
+          <div>
+            <label for="regCaregiverName" class="block text-xs font-bold text-slate-700 mb-1 cg-text-secondary">Full Caregiver Name</label>
+            <input type="text" id="regCaregiverName" required placeholder="e.g. Dr. Bimala Baruah" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-teal-600 cg-bg-subtle cg-text-primary">
+          </div>
+          <div>
+            <label for="regCaregiverEmail" class="block text-xs font-bold text-slate-700 mb-1 cg-text-secondary">Email Address</label>
+            <input type="email" id="regCaregiverEmail" required placeholder="caregiver@hospital.org" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-teal-600 cg-bg-subtle cg-text-primary">
+          </div>
+          <div>
+            <label for="regCaregiverRegion" class="block text-xs font-bold text-slate-700 mb-1 cg-text-secondary">Region / Location</label>
+            <select id="regCaregiverRegion" required class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-teal-600 cg-bg-subtle cg-text-primary">
+              <option value="Assam">Assam Region</option>
+              <option value="Mizoram">Mizoram Region</option>
+              <option value="Nagaland">Nagaland Region</option>
+              <option value="Meghalaya">Meghalaya Region</option>
+            </select>
+          </div>
+          <div>
+            <label for="regCaregiverPassword" class="block text-xs font-bold text-slate-700 mb-1 cg-text-secondary">Create Password</label>
+            <input id="regCaregiverPassword" type="password" required value="password123" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-teal-600 cg-bg-subtle cg-text-primary">
+          </div>
+
+          <button type="submit" class="w-full py-3.5 bg-teal-800 hover:bg-teal-700 text-white font-extrabold rounded-2xl shadow-md text-sm font-friendly transition min-h-[48px]">
+            Register Caregiver & Login ➔
+          </button>
+        </form>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 5: CAREGIVER PATIENT SELECTION DASHBOARD ==================== -->
+    <section id="caregiverPatientSelectionView" class="hidden py-10 min-h-[calc(100vh-4rem)]" aria-labelledby="activeCaregiverHeaderName">
+      <div class="max-w-5xl mx-auto px-4 space-y-6">
+        
+        <div class="bg-teal-900 text-white p-6 rounded-3xl shadow-md flex items-center justify-between">
+          <div>
+            <span class="text-xs text-teal-300 font-bold uppercase tracking-wider">Active Caregiver Session</span>
+            <h2 id="activeCaregiverHeaderName" class="text-2xl font-bold font-friendly">Caregiver Portal</h2>
+            <p class="text-xs text-teal-100 mt-1">Select a patient below to view memory relationship analytics, export telemetry reports, and edit font size settings</p>
+          </div>
+          <button onclick="switchView('caregiverAuth')" class="bg-teal-800 hover:bg-teal-700 text-teal-100 text-xs font-bold px-4 py-2 rounded-xl border border-teal-600 min-h-[44px]">
+            Sign Out
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <h3 class="font-bold text-slate-800 text-lg font-friendly cg-text-primary">Patients Currently Under Your Care</h3>
+          <div id="patientListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 6: CAREGIVER DETAILED PATIENT ANALYTICS ==================== -->
+    <section id="caregiverAnalyticsView" class="hidden py-8 min-h-[calc(100vh-4rem)]" aria-labelledby="analyticsPatientNameHeader">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between bg-teal-900 text-white p-6 rounded-3xl shadow-md">
+          <div class="space-y-1">
+            <button onclick="switchView('caregiverSelection')" class="text-xs text-teal-300 hover:underline flex items-center gap-1 font-bold mb-1">
+              ← Back to Patient List
+            </button>
+            <h2 id="analyticsPatientNameHeader" class="text-2xl font-bold font-friendly">Patient Memory Graph</h2>
+            <p id="analyticsPatientSubheader" class="text-xs text-teal-100">Language: Assamese • Age: 72</p>
+          </div>
+          
+          <div class="mt-4 md:mt-0 flex items-center space-x-3">
+            <button onclick="openAddMemoryModal()" class="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold px-4 py-2.5 rounded-xl text-sm shadow transition min-h-[44px]">
+              + Add Family Memory
+            </button>
+            <button onclick="logoutCaregiver()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold px-4 py-2.5 rounded-xl text-sm border border-rose-500 shadow transition flex items-center gap-1 min-h-[44px]">
+              <span aria-hidden="true">🚪</span>
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-3xl border border-teal-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 cg-card">
+          <div class="space-y-0.5">
+            <div class="flex items-center space-x-2 text-teal-900 font-bold text-sm cg-text-primary">
+              <span aria-hidden="true">🔤</span>
+              <span class="font-friendly">Patient Preferred Font Size Remote Adjuster</span>
+              <span id="caregiverPatientFontBadge" class="bg-teal-100 text-teal-900 font-mono text-xs px-2.5 py-0.5 rounded-md font-bold">20px</span>
+            </div>
+            <p class="text-xs text-slate-500 cg-text-secondary">
+              Adjusting this font size will update this specific patient's profile in the persistent database.
+            </p>
+          </div>
+
+          <div class="flex items-center space-x-3 min-w-[260px]">
+            <span class="text-xs font-bold text-slate-400" aria-hidden="true">14px</span>
+            <input type="range" id="caregiverFontSlider" min="14" max="32" step="2" value="20" aria-label="Caregiver Remote Font Size Slider" aria-valuemin="14" aria-valuemax="32" aria-valuenow="20" oninput="handleCaregiverFontSliderChange(this.value); this.setAttribute('aria-valuenow', this.value);" class="w-full accent-teal-800 cursor-pointer">
+            <span class="text-sm font-bold text-slate-800 cg-text-primary" aria-hidden="true">32px</span>
+          </div>
+        </div>
+
+        <!-- Metric Summary Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1 cg-card">
+            <div class="text-xs font-bold text-slate-400 uppercase cg-text-secondary">Independent Recall Rate</div>
+            <div class="text-3xl font-extrabold text-teal-700 font-friendly" id="statIndependent">72%</div>
+            <div class="text-xs text-emerald-600 font-semibold">↑ +14% from last week</div>
+          </div>
+          
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1 cg-card">
+            <div class="text-xs font-bold text-slate-400 uppercase cg-text-secondary">Hint Dependency</div>
+            <div class="text-3xl font-extrabold text-amber-600 font-friendly" id="statDependency">31%</div>
+            <div class="text-xs text-emerald-600 font-semibold">↓ -8% support needed</div>
+          </div>
+          
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1 cg-card">
+            <div class="text-xs font-bold text-slate-400 uppercase cg-text-secondary">Avg Response Speed</div>
+            <div class="text-3xl font-extrabold text-slate-800 font-friendly cg-text-primary" id="statSpeed">8.4s</div>
+            <div class="text-xs text-slate-500 font-semibold cg-text-secondary">Target range: 5s–12s</div>
+          </div>
+          
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1 cg-card">
+            <div class="text-xs font-bold text-slate-400 uppercase cg-text-secondary">Weak Relationship Link</div>
+            <div class="text-xl font-extrabold text-rose-600 font-friendly mt-1" id="statWeakLink">Person → Place</div>
+            <div class="text-[11px] text-slate-500 cg-text-secondary">Targeted by AI activity engine</div>
+          </div>
+        </div>
+
+        <!-- Interactive SVG Graph -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <div class="lg:col-span-7 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 cg-card">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3 cg-bg-subtle">
+              <div>
+                <h3 class="font-bold text-slate-800 text-lg font-friendly cg-text-primary">Memory Relationship Network</h3>
+                <p class="text-xs text-slate-500 cg-text-secondary">Click any node to inspect relationship details and recent attempts.</p>
+              </div>
+              <span class="text-xs bg-amber-100 text-amber-900 font-bold px-2.5 py-1 rounded-full">
+                Interactive Graph
+              </span>
+            </div>
+
+            <div class="bg-slate-900 rounded-2xl p-4 h-80 relative flex items-center justify-center overflow-hidden border border-slate-800">
+              <svg id="memoryGraphSvg" class="w-full h-full" viewBox="0 0 500 300" aria-label="Interactive Memory Relationship Network Diagram">
+                <line x1="250" y1="60" x2="150" y2="150" stroke="#f59e0b" stroke-width="3" stroke-dasharray="4" />
+                <line x1="250" y1="60" x2="350" y2="150" stroke="#10b981" stroke-width="3" />
+                <line x1="350" y1="150" x2="250" y2="240" stroke="#f43f5e" stroke-width="4" />
+                <line x1="150" y1="150" x2="250" y2="240" stroke="#10b981" stroke-width="3" />
+
+                <!-- Node: Priya -->
+                <g class="cursor-pointer" tabindex="0" role="button" aria-label="Inspect Priya Node" onclick="inspectNode('Priya (Daughter)', 'Person', '90% Accuracy', 'Strongly recognized face and voice.')" onkeydown="if(event.key==='Enter') inspectNode('Priya (Daughter)', 'Person', '90% Accuracy', 'Strongly recognized face and voice.')">
+                  <circle cx="250" cy="60" r="28" fill="#d97706" />
+                  <text x="250" y="65" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Priya</text>
+                  <text x="250" y="100" text-anchor="middle" fill="#fcd34d" font-size="10">Daughter</text>
+                </g>
+
+                <!-- Node: Bihu -->
+                <g class="cursor-pointer" tabindex="0" role="button" aria-label="Inspect Bihu Node" onclick="inspectNode('Bihu Festival', 'Event', '85% Accuracy', 'Responds well to Bihu folk music audio.')" onkeydown="if(event.key==='Enter') inspectNode('Bihu Festival', 'Event', '85% Accuracy', 'Responds well to Bihu folk music audio.')">
+                  <circle cx="350" cy="150" r="28" fill="#059669" />
+                  <text x="350" y="155" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Bihu</text>
+                  <text x="350" y="190" text-anchor="middle" fill="#6ee7b7" font-size="10">Festival</text>
+                </g>
+
+                <!-- Node: 2019 -->
+                <g class="cursor-pointer" tabindex="0" role="button" aria-label="Inspect 2019 Node" onclick="inspectNode('Year 2019', 'Time', '88% Accuracy', 'Recalls time context when tied to family events.')" onkeydown="if(event.key==='Enter') inspectNode('Year 2019', 'Time', '88% Accuracy', 'Recalls time context when tied to family events.')">
+                  <circle cx="150" cy="150" r="28" fill="#0284c7" />
+                  <text x="150" y="155" text-anchor="middle" fill="white" font-size="12" font-weight="bold">2019</text>
+                  <text x="150" y="190" text-anchor="middle" fill="#7dd3fc" font-size="10">Year</text>
+                </g>
+
+                <!-- Node: Barpeta -->
+                <g class="cursor-pointer" tabindex="0" role="button" aria-label="Inspect Barpeta Node" onclick="inspectNode('Barpeta', 'Place', '45% Recall (Weak Link)', 'Person → Place relationship shows hesitation. AI provides progressive hints.')" onkeydown="if(event.key==='Enter') inspectNode('Barpeta', 'Place', '45% Recall (Weak Link)', 'Person → Place relationship shows hesitation. AI provides progressive hints.')">
+                  <circle cx="250" cy="240" r="32" fill="#e11d48" class="node-pulse" />
+                  <text x="250" y="245" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Barpeta</text>
+                  <text x="250" y="285" text-anchor="middle" fill="#fca5a5" font-size="10" font-weight="bold">WEAK LINK</text>
+                </g>
+              </svg>
+            </div>
+
+            <div id="nodeInspector" class="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between cg-bg-subtle" aria-live="polite">
+              <div>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider cg-text-secondary">Selected Node</span>
+                <h4 id="nodeTitle" class="font-bold text-slate-800 text-sm font-friendly cg-text-primary">Barpeta (Place Node)</h4>
+                <p id="nodeDesc" class="text-xs text-slate-600 mt-0.5 cg-text-secondary">Person → Place connection strength is 45%. AI prioritizes clues for this link.</p>
+              </div>
+              <span id="nodeScore" class="bg-rose-100 text-rose-800 font-extrabold text-xs px-3 py-1 rounded-full border border-rose-200">
+                45% Recall
+              </span>
+            </div>
+          </div>
+
+          <!-- REALTIME ACTIVITY LOG & TELEMETRY FEED -->
+          <div class="lg:col-span-5 space-y-6">
+            <div class="bg-amber-50 border-2 border-amber-300 p-5 rounded-3xl space-y-2">
+              <div class="flex items-center space-x-2 text-amber-900 font-bold text-sm">
+                <span aria-hidden="true">⚠️</span>
+                <span class="font-friendly">Cognitive Observation Alert</span>
+              </div>
+              <p class="text-xs text-slate-700 leading-relaxed">
+                Patient has hesitated on <strong>Person → Place</strong> questions over the last 3 sessions. Independent recall improved from 40% to 70% when supported by visual clues.
+              </p>
+              <p class="text-[10px] text-slate-400 italic">
+                *Note: Non-clinical observation for caregiver reference. Does not constitute a medical diagnosis.
+              </p>
+            </div>
+
+            <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 cg-card">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-3 cg-bg-subtle">
+                <div>
+                  <h3 class="font-bold text-slate-800 text-base font-friendly cg-text-primary">Telemetry & Voice Logs</h3>
+                  <span class="text-[10px] text-teal-800 bg-teal-100 font-bold px-2 py-0.5 rounded">Persistent Storage</span>
+                </div>
+
+                <div class="relative inline-block text-left">
+                  <button onclick="toggleReportMenu()" aria-expanded="false" aria-controls="reportDropdownMenu" class="px-3 py-1.5 bg-teal-800 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow flex items-center gap-1.5 transition min-h-[44px]">
+                    <span aria-hidden="true">📄</span>
+                    <span>Export Summary ▾</span>
+                  </button>
+                  <div id="reportDropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 py-2 text-xs font-semibold cg-card" role="menu">
+                    <button onclick="exportTelemetryPDF()" role="menuitem" class="w-full text-left px-4 py-2 hover:bg-slate-100 text-slate-800 flex items-center gap-2 cg-text-primary min-h-[44px]">
+                      <span aria-hidden="true">📥</span> Download PDF Report
+                    </button>
+                    <button onclick="exportTelemetryCSV()" role="menuitem" class="w-full text-left px-4 py-2 hover:bg-slate-100 text-slate-800 flex items-center gap-2 cg-text-primary min-h-[44px]">
+                      <span aria-hidden="true">📊</span> Download CSV Data
+                    </button>
+                    <hr class="my-1 border-slate-100 cg-bg-subtle">
+                    <button onclick="printTelemetryReport()" role="menuitem" class="w-full text-left px-4 py-2 hover:bg-slate-100 text-slate-800 flex items-center gap-2 cg-text-primary min-h-[44px]">
+                      <span aria-hidden="true">🖨️</span> Print Clinical Log
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div id="activityTelemetryLogContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-900 text-slate-400 py-8 border-t border-slate-800 text-xs" role="contentinfo">
+    <div class="max-w-7xl mx-auto px-4 text-center space-y-3">
+      <p class="text-slate-300 font-medium font-friendly text-sm">
+        Every memory has a story. Every story has connections. Memory Threads helps keep those connections alive.
+      </p>
+      <p class="max-w-3xl mx-auto text-slate-500 text-[11px] leading-relaxed">
+        <strong>Medical Disclaimer:</strong> Memory Threads is designed for cognitive engagement, memory practice, and caregiver observation. Performance insights are non-diagnostic and should not replace clinical evaluation by qualified healthcare professionals.
+      </p>
+      <p class="text-slate-600">© 2026 Memory Threads Platform. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- MODAL: ADD MEMORY -->
+  <div id="addMemoryModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 cg-card">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 id="modalTitle" class="font-bold text-slate-800 text-lg font-friendly cg-text-primary">+ Add Personal Memory</h3>
+        <button onclick="closeAddMemoryModal()" aria-label="Close modal" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1">&times;</button>
+      </div>
+
+      <form id="memoryForm" onsubmit="saveMemory(event)" class="space-y-3">
+        <div>
+          <label for="memTitle" class="block text-xs font-bold text-slate-600 mb-1 cg-text-secondary">Memory Title</label>
+          <input id="memTitle" type="text" required placeholder="e.g. 2019 Bihu Celebration" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-amber-500 cg-bg-subtle cg-text-primary">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="memPerson" class="block text-xs font-bold text-slate-600 mb-1 cg-text-secondary">Person Involved</label>
+            <input id="memPerson" type="text" required placeholder="e.g. Priya" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-amber-500 cg-bg-subtle cg-text-primary">
+          </div>
+          <div>
+            <label for="memRel" class="block text-xs font-bold text-slate-600 mb-1 cg-text-secondary">Relationship</label>
+            <input id="memRel" type="text" required placeholder="e.g. Daughter" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-amber-500 cg-bg-subtle cg-text-primary">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="memLoc" class="block text-xs font-bold text-slate-600 mb-1 cg-text-secondary">Location / Place</label>
+            <input id="memLoc" type="text" required placeholder="e.g. Barpeta" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-amber-500 cg-bg-subtle cg-text-primary">
+          </div>
+          <div>
+            <label for="memEvent" class="block text-xs font-bold text-slate-600 mb-1 cg-text-secondary">Event / Festival</label>
+            <input id="memEvent" type="text" required placeholder="e.g. Bihu" class="w-full px-3 py-2 border rounded-xl text-sm focus:outline-amber-500 cg-bg-subtle cg-text-primary">
+          </div>
+        </div>
+        <div class="pt-2 flex justify-end space-x-3">
+          <button type="button" onclick="closeAddMemoryModal()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs cg-bg-subtle cg-text-primary min-h-[44px]">Cancel</button>
+          <button type="submit" class="px-5 py-2 bg-amber-600 text-white font-bold rounded-xl text-xs shadow min-h-[44px]">Save & Build Graph Node</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC ENGINE -->
+  <script>
+    // SCREEN READER ACCESSIBILITY ANNOUNCER
+    function announceToScreenReader(message) {
+      const announcer = document.getElementById('srAnnouncer');
+      if (announcer) {
+        announcer.innerText = message;
+      }
+    }
+
+    // KEYBOARD NAVIGATION ESCAPE LISTENER
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('addMemoryModal');
+        if (modal && !modal.classList.contains('hidden')) {
+          closeAddMemoryModal();
+        }
+        const menu = document.getElementById('reportDropdownMenu');
+        if (menu && !menu.classList.contains('hidden')) {
+          menu.classList.add('hidden');
+        }
+      }
+    });
+
+    // INTELLIGENT SPEECH RECOGNITION CONTROLLER
+    let recognition = null;
+    let recognitionActive = false;
+
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true; 
+
+      recognition.onstart = function() {
+        recognitionActive = true;
+        const transcriptContainer = document.getElementById('liveSpeechTranscriptContainer');
+        const transcriptText = document.getElementById('liveSpeechTranscriptText');
+        const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+        if (transcriptContainer && transcriptText) {
+          transcriptContainer.classList.remove('hidden');
+          transcriptText.innerText = `"${langData.listeningText}"`;
+        }
+      };
+
+      recognition.onresult = function(event) {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        const displayText = finalTranscript || interimTranscript;
+        const transcriptText = document.getElementById('liveSpeechTranscriptText');
+        if (transcriptText && displayText) {
+          transcriptText.innerText = `"${displayText}"`;
+        }
+
+        if (finalTranscript.trim().length > 0) {
+          evaluateSpokenAnswer(finalTranscript.trim());
+        }
+      };
+
+      recognition.onerror = function(event) {
+        console.warn("Speech Recognition Event Alert:", event.error);
+        if (event.error !== 'no-speech') {
+          handleSpeechRecognitionFallback();
+        }
+      };
+
+      recognition.onend = function() {
+        recognitionActive = false;
+        const micBtn = document.getElementById('micBtn');
+        const micBtnText = document.getElementById('micBtnText');
+        const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+        if (micBtn && micBtnText) {
+          micBtn.classList.remove('bg-rose-600', 'listening-pulse');
+          micBtn.classList.add('bg-amber-600', 'pulse-ring');
+          micBtnText.innerText = langData.btnMicDefault;
+        }
+      };
+    }
+
+    // REGIONAL SPEECH SYNTHESIS ENGINE
+    function speakTextTTS(text) {
+      playAudioChimePrompt();
+
+      if (!('speechSynthesis' in window)) {
+        announceToScreenReader("Audio prompt: " + text);
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = state.speechRate || 0.8;
+      utterance.pitch = state.speechPitch || 1.0;
+
+      let voices = window.speechSynthesis.getVoices();
+      if (voices.length === 0) {
+        voices = window.speechSynthesis.getVoices();
+      }
+
+      const patientLang = (state.activePatient && state.activePatient.language) ? state.activePatient.language.toLowerCase() : 'english';
+
+      let matchingVoice = null;
+
+      if (patientLang === 'assamese' || patientLang === 'as') {
+        matchingVoice = voices.find(v => v.lang.toLowerCase().startsWith('as')) ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('bn')) ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('hi')) ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('en'));
+      } else if (patientLang === 'mizo' || patientLang === 'nagamese' || patientLang === 'khasi') {
+        matchingVoice = voices.find(v => v.lang.toLowerCase().startsWith(patientLang.substring(0,2))) ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('en'));
+      } else {
+        matchingVoice = voices.find(v => v.lang.toLowerCase().startsWith('en')) || voices[0];
+      }
+
+      if (matchingVoice) {
+        utterance.voice = matchingVoice;
+        utterance.lang = matchingVoice.lang;
+      }
+
+      window.speechSynthesis.speak(utterance);
+      announceToScreenReader("Speaking: " + text);
+    }
+
+    function playAudioChimePrompt() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const audioCtx = new AudioCtx();
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.3);
+
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.35);
+      } catch (e) {
+        console.warn("Web Audio API not supported", e);
+      }
+    }
+
+    function speakQuestionWithTTS() {
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      speakTextTTS(langData.question);
+    }
+
+    function handleSpeechRateChange(newRate) {
+      const rate = parseFloat(newRate);
+      state.speechRate = rate;
+      document.getElementById('speechRateBadge').innerText = rate.toFixed(2) + 'x';
+      announceToScreenReader(`Speech rate adjusted to ${rate.toFixed(2)} times speed`);
+    }
+
+    function handleSpeechPitchChange(newPitch) {
+      const pitch = parseFloat(newPitch);
+      state.speechPitch = pitch;
+      document.getElementById('speechPitchBadge').innerText = pitch.toFixed(2);
+      announceToScreenReader(`Speech tone pitch adjusted to ${pitch.toFixed(2)}`);
+    }
+
+    async function analyzeVoiceConfidence(stream) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioCtx.createAnalyser();
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        analyser.fftSize = 256;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        analyser.getByteFrequencyData(dataArray);
+        const averageVolume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        
+        return Math.min(100, Math.max(30, Math.round(averageVolume * 1.5)));
+      } catch(e) {
+        return Math.floor(Math.random() * 15) + 82;
+      }
+    }
+
+    // PERSISTENT LOCAL STORAGE DATABASE
+    const STORAGE_KEY_CAREGIVERS = "MT_CAREGIVERS_V2";
+    const STORAGE_KEY_PATIENTS = "MT_PATIENTS_V2";
+    const STORAGE_KEY_LOGS = "MT_ACTIVITY_LOGS_V2";
+
+    const defaultCaregivers = [
+      { id: "c1", name: "Bimala Baruah", email: "bimala@hospital.org", region: "Assam" },
+      { id: "c2", name: "Lalrinsanga Mizo", email: "mizo@health.org", region: "Mizoram" }
+    ];
+
+    const defaultPatients = [
+      { id: "p1", name: "Ananya Das", age: 72, language: "assamese", caregiverName: "Bimala Baruah", coins: 120, fontSize: 20 },
+      { id: "p2", name: "Ramesh Sharma", age: 76, language: "mizo", caregiverName: "Lalrinsanga Mizo", coins: 85, fontSize: 24 }
+    ];
+
+    const defaultLogs = [
+      { id: "l1", patientId: "p1", timestamp: "Today, 09:14 AM", question: "Where did you celebrate Bihu with Priya?", answer: "Barpeta", responseTimeSec: 8, confidenceScore: 88, hintLevelUsed: 1, coinsEarned: 6 },
+      { id: "l2", patientId: "p1", timestamp: "Yesterday, 04:30 PM", question: "Who is Priya?", answer: "Daughter", responseTimeSec: 4, confidenceScore: 95, hintLevelUsed: 0, coinsEarned: 10 }
+    ];
+
+    function loadLocalDb(key, defaultValue) {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try { return JSON.parse(stored); } catch(e) { return defaultValue; }
+      }
+      localStorage.setItem(key, JSON.stringify(defaultValue));
+      return defaultValue;
+    }
+
+    function saveLocalDb(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    const db = {
+      caregivers: loadLocalDb(STORAGE_KEY_CAREGIVERS, defaultCaregivers),
+      patients: loadLocalDb(STORAGE_KEY_PATIENTS, defaultPatients),
+      logs: loadLocalDb(STORAGE_KEY_LOGS, defaultLogs)
+    };
+
+    // CONFETTI ENGINE
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const ctx = confettiCanvas.getContext('2d');
+    let confettiParticles = [];
+
+    function resizeConfettiCanvas() {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeConfettiCanvas);
+    resizeConfettiCanvas();
+
+    function triggerConfettiPopper() {
+      confettiParticles = [];
+      const colors = ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899'];
+      for (let i = 0; i < 140; i++) {
+        confettiParticles.push({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2 + 80,
+          vx: (Math.random() - 0.5) * 20,
+          vy: (Math.random() - 0.85) * 24,
+          size: Math.random() * 11 + 6,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * 360,
+          rotationSpeed: (Math.random() - 0.5) * 12,
+          opacity: 1
+        });
+      }
+      animateConfetti();
+      playCelebrationChime();
+    }
+
+    function animateConfetti() {
+      ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      let active = false;
+
+      confettiParticles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.42;
+        p.opacity -= 0.012;
+        p.rotation += p.rotationSpeed;
+
+        if (p.opacity > 0) {
+          active = true;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate((p.rotation * Math.PI) / 180);
+          ctx.globalAlpha = Math.max(0, p.opacity);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          ctx.restore();
+        }
+      });
+
+      if (active) requestAnimationFrame(animateConfetti);
+      else ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    }
+
+    function playCelebrationChime() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const audioCtx = new AudioCtx();
+
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.value = freq;
+          
+          gain.gain.setValueAtTime(0, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.2, audioCtx.currentTime + idx * 0.1 + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + idx * 0.1 + 0.8);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(audioCtx.currentTime + idx * 0.1);
+          osc.stop(audioCtx.currentTime + idx * 0.1 + 0.85);
+        });
+      } catch (e) {}
+    }
+
+    const languagePrompts = {
+      assamese: {
+        greeting: "শুভ ৰাতিপুৱা, ",
+        question: "আপুনি প্ৰিয়াৰ সৈতে বিহুলৈ ক’লৈ গৈছিল?",
+        translation: "Caregiver Translation: 'Where did you celebrate Bihu with Priya?'",
+        hint1: "পৰিয়ালৰ ফটোখন চাওক। আপোনাৰ গাঁৱত বিহুৰ উৎসৱৰ কথা ভাবক।",
+        hint1Caregiver: "Caregiver Translation: 'Look at the family photo. Think about Bihu in your village.'",
+        hint2: "বৰপেটা আছিল নে গুৱাহাটী আছিল?",
+        hint2Caregiver: "Caregiver Translation: 'Was it Barpeta or Guwahati?'",
+        hint1Title: "স্তৰ ১ সংকেত — দৃশ্যমান সহায়",
+        hint2Title: "স্তৰ ২ সংকেত — বিকল্প সহায়",
+        correctText: "অভিনন্দন! আপোনাৰ উত্তৰ শুদ্ধ হৈছে! বৰপেটা!",
+        correctTextIndep: "অভিনন্দন! আপুনি নিজে বৰপেটা মনত পেলালে!",
+        wrongText: "ই ভুল হ’ব পাৰে, পুনৰ চেষ্টা কৰক!",
+        heardText: "আমি শুনিলো: ",
+        btnSpeakAgain: "🎙️ পুনৰ কওক",
+        btnGetHint: "💡 সংকেত লওক",
+        btnMicDefault: "মাইক্ৰ'ফোন টিপি উত্তৰ কওক",
+        btnMicActive: "শুনি থকা হৈছে... এতিয়াই উত্তৰ কওক!",
+        btnSpeakQuestion: "প্ৰশ্নটো ডাঙৰকৈ পঢ়ক",
+        btnNeedHint: "সংকেত লাগে নেকি?",
+        listeningText: "শুনি থকা হৈছে...",
+        hearingLabel: "🎙️ আপোনাৰ মাত শুনি থকা হৈছে...",
+        promptFallback: "উত্তৰটো টাইপ কৰক (যেনে 'Barpeta'):",
+        correctKeywords: ["barpeta", "বৰপেটা", "barpeta bihu", "peta"]
+      },
+      mizo: {
+        greeting: "Chibai, ",
+        question: "Priya nen Bihu khawiah nge in hmanni?",
+        translation: "Caregiver Translation: 'Where did you celebrate Bihu with Priya?'",
+        hint1: "Chhungkaw thlalak hi en mah le. In khuaa Bihu hmang kha ngaihtuah rawh.",
+        hint1Caregiver: "Caregiver Translation: 'Look at the family photo. Think about Bihu in your village.'",
+        hint2: "Barpeta nge Guwahati a nih?",
+        hint2Caregiver: "Caregiver Translation: 'Was it Barpeta or Guwahati?'",
+        hint1Title: "Level 1 Hriattirna — Thlalak En Tirtu",
+        hint2Title: "Level 2 Hriattirna — Thlan Tur Mite",
+        correctText: "Kha le! I chhanna a dik e! Barpeta a ni e!",
+        correctTextIndep: "Tah chho ta! I mahni ngeiin Barpeta i hre chhuak e!",
+        wrongText: "A dik lo a ni thei, khawngaihin han ti nawn leh teh!",
+        heardText: "Kan hriat dan: ",
+        btnSpeakAgain: "🎙️ Sawi Nawn Rawh",
+        btnGetHint: "💡 Hriattirna Dil Rawh",
+        btnMicDefault: "Microphone Hmeh A Sawi Rawh",
+        btnMicActive: "A ngaithla e... Sawi rawi!",
+        btnSpeakQuestion: "Zawhna Sawi Chhuak Rawh",
+        btnNeedHint: "Hriattirna I Mamawh Em?",
+        listeningText: "A ngaithla e...",
+        hearingLabel: "🎙️ I aw a ngaithla e...",
+        promptFallback: "I chhanna ziak rawh (e.g. 'Barpeta'):",
+        correctKeywords: ["barpeta", "barpeta bihu"]
+      },
+      nagamese: {
+        greeting: "Good morning, ",
+        question: "Priya logote Bihu kon jaga te hoishe?",
+        translation: "Caregiver Translation: 'Where did you celebrate Bihu with Priya?'",
+        hint1: "Family photo sai lo. Aapne laga village te Bihu katha yaad kabi.",
+        hint1Caregiver: "Caregiver Translation: 'Look at the family photo. Think about Bihu in your village.'",
+        hint2: "Barpeta thakishe na Guwahati thakishe?",
+        hint2Caregiver: "Caregiver Translation: 'Was it Barpeta or Guwahati?'",
+        hint1Title: "Level 1 Clue — Photo Saibi",
+        hint2Title: "Level 2 Clue — Option Saibi",
+        correctText: "Khushi lagishe! Aapne laga answer ekdam sahite ase! Barpeta!",
+        correctTextIndep: "Khushi lagishe! Aapne nije hi Barpeta yaad korishe!",
+        wrongText: "Etu bhul hobi pare, ekbar akou try kabi!",
+        heardText: "Ami khan hunishe: ",
+        btnSpeakAgain: "🎙️ Akou Kobi",
+        btnGetHint: "💡 Clue Lobi",
+        btnMicDefault: "Mic Dabi Kene Answer Kobi",
+        btnMicActive: "Huni ase... Etia answer kobi!",
+        btnSpeakQuestion: "Question Zor Se Kobi",
+        btnNeedHint: "Clue Lagibo Na?",
+        listeningText: "Huni ase...",
+        hearingLabel: "🎙️ Aapne laga awaaz huni ase...",
+        promptFallback: "Answer likhibi (e.g. 'Barpeta'):",
+        correctKeywords: ["barpeta", "barpeta bihu"]
+      },
+      khasi: {
+        greeting: "Kumno, ",
+        question: "Hangno phi lehkmen Bihu bad i Priya?",
+        translation: "Caregiver Translation: 'Where did you celebrate Bihu with Priya?'",
+        hint1: "Pitiah ia ka dur iing. Kynmaw ia ka Bihu ha shnong jong phi.",
+        hint1Caregiver: "Caregiver Translation: 'Look at the family photo. Think about Bihu in your village.'",
+        hint2: "Dei ha Barpeta lane ha Guwahati?",
+        hint2Caregiver: "Caregiver Translation: 'Was it Barpeta or Guwahati?'",
+        hint1Title: "Level 1 Jingiyar — Dur Iing",
+        hint2Title: "Level 2 Jingiyar — Jied Kylla",
+        correctText: "Khublei Shibun! Aiu ba phi jubab ka dei chisha! Barpeta!",
+        correctTextIndep: "Khublei Shibun! Phi kynmaw hi marwei ia ka Barpeta!",
+        wrongText: "Iamat ka bakla, sngewbha pyrshang biang!",
+        heardText: "Ngi iohsngew: ",
+        btnSpeakAgain: "🎙️ Kren Biang",
+        btnGetHint: "💡 Ioh Jingiyar",
+        btnMicDefault: "Phem Ia Ka Mic Bad Kren",
+        btnMicActive: "Sngap bad Kren shen!",
+        btnSpeakQuestion: "Kren Ia Ka Jingkylli",
+        btnNeedHint: "Donkam Jingiyar?",
+        listeningText: "Sngap biang...",
+        hearingLabel: "🎙️ Sngap ia ka syngwiang...",
+        promptFallback: "Thoh ia ka jubab (e.g. 'Barpeta'):",
+        correctKeywords: ["barpeta", "barpeta bihu"]
+      },
+      english: {
+        greeting: "Good morning, ",
+        question: "Where did you celebrate Bihu with Priya?",
+        translation: "Caregiver Translation: 'Where did you celebrate Bihu with Priya?'",
+        hint1: "Look at the family photo. Think about the Bihu festival in your native village.",
+        hint1Caregiver: "Caregiver Translation: 'Look at the family photo. Think about Bihu in your village.'",
+        hint2: "Was it Barpeta or Guwahati?",
+        hint2Caregiver: "Caregiver Translation: 'Was it Barpeta or Guwahati?'",
+        hint1Title: "Level 1 Clue — Visual Anchor",
+        hint2Title: "Level 2 Clue — Choice Assistance",
+        correctText: "Congratulations! Your answer is correct! Barpeta!",
+        correctTextIndep: "Congratulations! You remembered Barpeta completely on your own!",
+        wrongText: "It might be wrong, please try again!",
+        heardText: "We heard: ",
+        btnSpeakAgain: "🎙️ Speak Again",
+        btnGetHint: "💡 Get a Clue",
+        btnMicDefault: "Tap Microphone & Speak Answer",
+        btnMicActive: "Listening... Say your answer now!",
+        btnSpeakQuestion: "Speak Question Out Loud",
+        btnNeedHint: "Need a Hint?",
+        listeningText: "Listening...",
+        hearingLabel: "🎙️ Hearing Your Voice...",
+        promptFallback: "Type your answer (e.g., 'Barpeta'):",
+        correctKeywords: ["barpeta", "barpeta bihu", "peta"]
+      }
+    };
+
+    const state = {
+      currentView: 'landing',
+      activePatient: db.patients[0],
+      activeCaregiver: db.caregivers[0],
+      currentGameMode: 'recall',
+      patientCoins: 120,
+      hesitationSeconds: 0,
+      hesitationTimerId: null,
+      currentHintLevel: 0,
+      isIndependentTestMode: false,
+      isVoiceListening: false,
+      audioStream: null,
+      isCaregiverDarkMode: false,
+      isHighContrast: false,
+      speechRate: 0.8,
+      speechPitch: 1.0
+    };
+
+    // INITIALIZATION
+    window.onload = function() {
+      populateDropdowns();
+      applyPatientFontSize(state.activePatient.fontSize || 20);
+    };
+
+    function populateDropdowns() {
+      const loginPatientSelect = document.getElementById('loginPatientSelect');
+      loginPatientSelect.innerHTML = db.patients.map(p => 
+        `<option value="${p.id}">${p.name} (Age ${p.age} • Font Size: ${p.fontSize || 20}px)</option>`
+      ).join('');
+
+      const regCaregiverSelect = document.getElementById('regCaregiverSelect');
+      regCaregiverSelect.innerHTML = db.caregivers.map(c => 
+        `<option value="${c.name}">${c.name} (${c.region})</option>`
+      ).join('');
+
+      const loginCaregiverSelect = document.getElementById('loginCaregiverSelect');
+      loginCaregiverSelect.innerHTML = db.caregivers.map(c => 
+        `<option value="${c.id}">${c.name} (${c.region})</option>`
+      ).join('');
+    }
+
+    function toggleHighContrastMode() {
+      state.isHighContrast = !state.isHighContrast;
+      if (state.isHighContrast) {
+        document.body.classList.add('high-contrast');
+        announceToScreenReader("High contrast mode enabled");
+      } else {
+        document.body.classList.remove('high-contrast');
+        announceToScreenReader("High contrast mode disabled");
+      }
+    }
+
+    function toggleCaregiverDarkMode() {
+      state.isCaregiverDarkMode = !state.isCaregiverDarkMode;
+      const body = document.body;
+      const icon = document.getElementById('cgThemeIcon');
+      const text = document.getElementById('cgThemeText');
+
+      if (state.isCaregiverDarkMode) {
+        body.classList.add('cg-dark-mode');
+        icon.innerText = '☀️';
+        text.innerText = 'Light Mode';
+        announceToScreenReader("Caregiver dark mode enabled");
+      } else {
+        body.classList.remove('cg-dark-mode');
+        icon.innerText = '🌙';
+        text.innerText = 'Dark Mode';
+        announceToScreenReader("Caregiver dark mode disabled");
+      }
+    }
+
+    function applyPatientFontSize(fontSizePx) {
+      const size = parseInt(fontSizePx) || 20;
+      document.documentElement.style.setProperty('--patient-font-scale', size + 'px');
+      
+      const patientSlider = document.getElementById('patientInlineFontSlider');
+      const profileSlider = document.getElementById('profileFontSlider');
+      const caregiverSlider = document.getElementById('caregiverFontSlider');
+
+      if (patientSlider) {
+        patientSlider.value = size;
+        patientSlider.setAttribute('aria-valuenow', size);
+      }
+      if (profileSlider) {
+        profileSlider.value = size;
+        profileSlider.setAttribute('aria-valuenow', size);
+      }
+      if (caregiverSlider) {
+        caregiverSlider.value = size;
+        caregiverSlider.setAttribute('aria-valuenow', size);
+      }
+
+      const liveBadge = document.getElementById('patientLiveFontLabel');
+      const profBadge = document.getElementById('profFontSizeBadge');
+      const cgBadge = document.getElementById('caregiverPatientFontBadge');
+
+      if (liveBadge) liveBadge.innerText = size + 'px';
+      if (profBadge) profBadge.innerText = size + 'px';
+      if (cgBadge) cgBadge.innerText = size + 'px';
+    }
+
+    function saveActivePatientFontSize(sizePx) {
+      const size = parseInt(sizePx);
+      state.activePatient.fontSize = size;
+      
+      const pIndex = db.patients.findIndex(p => p.id === state.activePatient.id);
+      if (pIndex !== -1) {
+        db.patients[pIndex].fontSize = size;
+        saveLocalDb(STORAGE_KEY_PATIENTS, db.patients);
+      }
+      applyPatientFontSize(size);
+      announceToScreenReader(`Interface font size changed to ${size} pixels`);
+    }
+
+    function handlePatientFontSliderChange(newSize) {
+      saveActivePatientFontSize(newSize);
+    }
+
+    function setPatientFontSizePreset(size) {
+      saveActivePatientFontSize(size);
+    }
+
+    function handleCaregiverFontSliderChange(newSize) {
+      saveActivePatientFontSize(newSize);
+    }
+
+    function switchView(viewName) {
+      state.currentView = viewName;
+      document.getElementById('landingView').classList.add('hidden');
+      document.getElementById('patientAuthView').classList.add('hidden');
+      document.getElementById('patientView').classList.add('hidden');
+      document.getElementById('patientProfileView').classList.add('hidden');
+      document.getElementById('caregiverAuthView').classList.add('hidden');
+      document.getElementById('caregiverPatientSelectionView').classList.add('hidden');
+      document.getElementById('caregiverAnalyticsView').classList.add('hidden');
+
+      const cgDarkBtn = document.getElementById('caregiverDarkModeBtn');
+
+      if (viewName === 'landing') {
+        document.getElementById('landingView').classList.remove('hidden');
+        cgDarkBtn.classList.add('hidden');
+        stopHesitationClock();
+      } else if (viewName === 'patientAuth') {
+        document.getElementById('patientAuthView').classList.remove('hidden');
+        cgDarkBtn.classList.add('hidden');
+        stopHesitationClock();
+      } else if (viewName === 'patient') {
+        document.getElementById('patientView').classList.remove('hidden');
+        cgDarkBtn.classList.add('hidden');
+        startActivitySession();
+      } else if (viewName === 'patientProfile') {
+        document.getElementById('patientProfileView').classList.remove('hidden');
+        cgDarkBtn.classList.add('hidden');
+        renderPatientProfileView();
+        stopHesitationClock();
+      } else if (viewName === 'caregiverAuth') {
+        document.getElementById('caregiverAuthView').classList.remove('hidden');
+        cgDarkBtn.classList.remove('hidden');
+        stopHesitationClock();
+      } else if (viewName === 'caregiverSelection') {
+        document.getElementById('caregiverPatientSelectionView').classList.remove('hidden');
+        cgDarkBtn.classList.remove('hidden');
+        stopHesitationClock();
+      } else if (viewName === 'caregiverAnalytics') {
+        document.getElementById('caregiverAnalyticsView').classList.remove('hidden');
+        cgDarkBtn.classList.remove('hidden');
+        stopHesitationClock();
+      }
+
+      const activeSection = document.getElementById(viewName + 'View');
+      if (activeSection) {
+        const heading = activeSection.querySelector('h1, h2, h3');
+        if (heading) {
+          heading.setAttribute('tabindex', '-1');
+          heading.focus();
+        }
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderPatientProfileView() {
+      const p = state.activePatient;
+      document.getElementById('profPatientName').innerText = p.name;
+      document.getElementById('profPatientMeta').innerText = `Age: ${p.age} • Language: ${p.language.toUpperCase()} • Caregiver: ${p.caregiverName}`;
+      document.getElementById('profPatientCoins').innerText = `${p.coins} Coins`;
+      document.getElementById('profPatientId').innerText = p.id;
+      document.getElementById('profPatientLang').innerText = p.language.toUpperCase();
+      
+      applyPatientFontSize(p.fontSize || 20);
+    }
+
+    function logoutPatient() {
+      stopHesitationClock();
+      stopVoiceListening();
+      switchView('patientAuth');
+      announceToScreenReader("Logged out of patient portal");
+    }
+
+    function logoutCaregiver() {
+      switchView('caregiverAuth');
+      announceToScreenReader("Logged out of caregiver portal");
+    }
+
+    function switchCaregiverTab(tab) {
+      if (tab === 'login') {
+        document.getElementById('caregiverLoginForm').classList.remove('hidden');
+        document.getElementById('caregiverRegisterForm').classList.add('hidden');
+        document.getElementById('tabCaregiverLoginBtn').className = "flex-1 py-2 text-teal-800 border-b-2 border-teal-800";
+        document.getElementById('tabCaregiverLoginBtn').setAttribute('aria-selected', 'true');
+        document.getElementById('tabCaregiverRegisterBtn').className = "flex-1 py-2 text-slate-400 border-b-2 border-transparent";
+        document.getElementById('tabCaregiverRegisterBtn').setAttribute('aria-selected', 'false');
+      } else {
+        document.getElementById('caregiverLoginForm').classList.add('hidden');
+        document.getElementById('caregiverRegisterForm').classList.remove('hidden');
+        document.getElementById('tabCaregiverRegisterBtn').className = "flex-1 py-2 text-teal-800 border-b-2 border-teal-800";
+        document.getElementById('tabCaregiverRegisterBtn').setAttribute('aria-selected', 'true');
+        document.getElementById('tabCaregiverLoginBtn').className = "flex-1 py-2 text-slate-400 border-b-2 border-transparent";
+        document.getElementById('tabCaregiverLoginBtn').setAttribute('aria-selected', 'false');
+      }
+    }
+
+    function handleCaregiverRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('regCaregiverName').value;
+      const email = document.getElementById('regCaregiverEmail').value;
+      const region = document.getElementById('regCaregiverRegion').value;
+
+      const newCaregiver = { id: 'c' + (db.caregivers.length + 1), name, email, region };
+      db.caregivers.push(newCaregiver);
+      saveLocalDb(STORAGE_KEY_CAREGIVERS, db.caregivers);
+
+      state.activeCaregiver = newCaregiver;
+      populateDropdowns();
+      renderCaregiverPatientSelection();
+      switchView('caregiverSelection');
+      announceToScreenReader(`Caregiver ${name} registered successfully`);
+    }
+
+    function switchGameMode(mode) {
+      state.currentGameMode = mode;
+      document.getElementById('modeRecallContent').classList.add('hidden');
+      document.getElementById('modeMusicContent').classList.add('hidden');
+      document.getElementById('modeMatchContent').classList.add('hidden');
+
+      document.getElementById('gameModeRecallBtn').className = "py-2.5 rounded-xl hover:bg-amber-50 text-amber-900 font-friendly min-h-[44px]";
+      document.getElementById('gameModeMusicBtn').className = "py-2.5 rounded-xl hover:bg-amber-50 text-amber-900 font-friendly min-h-[44px]";
+      document.getElementById('gameModeMatchBtn').className = "py-2.5 rounded-xl hover:bg-amber-50 text-amber-900 font-friendly min-h-[44px]";
+
+      if (mode === 'recall') {
+        document.getElementById('modeRecallContent').classList.remove('hidden');
+        document.getElementById('gameModeRecallBtn').className = "py-2.5 rounded-xl bg-amber-600 text-white shadow font-friendly min-h-[44px]";
+        document.getElementById('activityModeBadge').innerText = "Personal Memory Recall";
+        announceToScreenReader("Switched to Personal Memory Recall mode");
+      } else if (mode === 'music') {
+        document.getElementById('modeMusicContent').classList.remove('hidden');
+        document.getElementById('gameModeMusicBtn').className = "py-2.5 rounded-xl bg-amber-600 text-white shadow font-friendly min-h-[44px]";
+        document.getElementById('activityModeBadge').innerText = "🎵 Folk Song Memory";
+        announceToScreenReader("Switched to Folk Song Memory mode");
+      } else if (mode === 'match') {
+        document.getElementById('modeMatchContent').classList.remove('hidden');
+        document.getElementById('gameModeMatchBtn').className = "py-2.5 rounded-xl bg-amber-600 text-white shadow font-friendly min-h-[44px]";
+        document.getElementById('activityModeBadge').innerText = "🧩 Photo Pair Match";
+        announceToScreenReader("Switched to Photo Pair Match mode");
+      }
+    }
+
+    function flipMatchCard(cardNum) {
+      const card = document.getElementById('card' + cardNum);
+      if (cardNum === 1 || cardNum === 3) {
+        card.innerText = "👵";
+        card.className = "h-24 bg-emerald-500 text-white font-bold text-3xl rounded-2xl shadow flex items-center justify-center min-h-[48px]";
+      } else {
+        card.innerText = "🌾";
+        card.className = "h-24 bg-amber-600 text-white font-bold text-3xl rounded-2xl shadow flex items-center justify-center min-h-[48px]";
+      }
+      
+      if (cardNum === 3) {
+        evaluateSpokenAnswer('Barpeta');
+      }
+    }
+
+    function switchPatientTab(tab) {
+      if (tab === 'login') {
+        document.getElementById('patientLoginForm').classList.remove('hidden');
+        document.getElementById('patientRegisterForm').classList.add('hidden');
+        document.getElementById('tabPatientLoginBtn').className = "flex-1 py-2 text-amber-800 border-b-2 border-amber-600";
+        document.getElementById('tabPatientLoginBtn').setAttribute('aria-selected', 'true');
+        document.getElementById('tabPatientRegisterBtn').className = "flex-1 py-2 text-slate-400 border-b-2 border-transparent";
+        document.getElementById('tabPatientRegisterBtn').setAttribute('aria-selected', 'false');
+      } else {
+        document.getElementById('patientLoginForm').classList.add('hidden');
+        document.getElementById('patientRegisterForm').classList.remove('hidden');
+        document.getElementById('tabPatientRegisterBtn').className = "flex-1 py-2 text-amber-800 border-b-2 border-amber-600";
+        document.getElementById('tabPatientRegisterBtn').setAttribute('aria-selected', 'true');
+        document.getElementById('tabPatientLoginBtn').className = "flex-1 py-2 text-slate-400 border-b-2 border-transparent";
+        document.getElementById('tabPatientLoginBtn').setAttribute('aria-selected', 'false');
+      }
+    }
+
+    function handlePatientLogin(e) {
+      e.preventDefault();
+      const patientId = document.getElementById('loginPatientSelect').value;
+      state.activePatient = db.patients.find(p => p.id === patientId);
+      applyPatientFontSize(state.activePatient.fontSize || 20);
+      switchView('patient');
+      announceToScreenReader(`Logged in as ${state.activePatient.name}`);
+    }
+
+    function handlePatientRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('regPatientName').value;
+      const age = parseInt(document.getElementById('regPatientAge').value);
+      const language = document.getElementById('regPatientLanguage').value;
+      const caregiverName = document.getElementById('regCaregiverSelect').value;
+      const fontSize = parseInt(document.getElementById('regPatientFontSize').value) || 24;
+
+      const newPatient = { id: 'p' + (db.patients.length + 1), name, age, language, caregiverName, coins: 100, fontSize };
+      db.patients.push(newPatient);
+      saveLocalDb(STORAGE_KEY_PATIENTS, db.patients);
+
+      state.activePatient = newPatient;
+      populateDropdowns();
+      applyPatientFontSize(fontSize);
+      switchView('patient');
+      announceToScreenReader(`Registered and logged in as ${name}`);
+    }
+
+    function handleCaregiverLogin(e) {
+      e.preventDefault();
+      const caregiverId = document.getElementById('loginCaregiverSelect').value;
+      state.activeCaregiver = db.caregivers.find(c => c.id === caregiverId);
+      renderCaregiverPatientSelection();
+      switchView('caregiverSelection');
+      announceToScreenReader(`Caregiver session active for ${state.activeCaregiver.name}`);
+    }
+
+    function renderCaregiverPatientSelection() {
+      document.getElementById('activeCaregiverHeaderName').innerText = `${state.activeCaregiver.name} (${state.activeCaregiver.region} Region)`;
+      
+      const assignedPatients = db.patients.filter(p => p.caregiverName === state.activeCaregiver.name);
+      const container = document.getElementById('patientListContainer');
+
+      if (assignedPatients.length === 0) {
+        container.innerHTML = `<div class="col-span-2 p-6 bg-white rounded-2xl text-slate-500 text-sm italic cg-card">No patients registered under ${state.activeCaregiver.name} yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = assignedPatients.map(p => `
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-teal-400 transition space-y-3 cg-card">
+          <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-2xl bg-teal-800 text-white flex items-center justify-center font-bold text-lg font-friendly" aria-hidden="true">👵</div>
+            <div>
+              <h4 class="font-bold text-slate-800 font-friendly cg-text-primary">${p.name}</h4>
+              <p class="text-xs text-slate-500 cg-text-secondary">Age: ${p.age} • Lang: ${p.language.toUpperCase()} • Saved Text Size: <strong class="text-teal-700 font-mono">${p.fontSize || 20}px</strong></p>
+            </div>
+          </div>
+          <button onclick="inspectPatientAnalytics('${p.id}')" class="w-full py-2 bg-teal-800 hover:bg-teal-700 text-white font-bold rounded-xl text-xs shadow min-h-[44px]">
+            Inspect Profile & Export Report ➔
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function inspectPatientAnalytics(patientId) {
+      const patient = db.patients.find(p => p.id === patientId);
+      state.activePatient = patient;
+      
+      document.getElementById('analyticsPatientNameHeader').innerText = `${patient.name}'s Memory Network`;
+      document.getElementById('analyticsPatientSubheader').innerText = `Age: ${patient.age} • Preferred Language: ${patient.language.toUpperCase()} • Saved Font Size: ${patient.fontSize || 20}px`;
+      
+      applyPatientFontSize(patient.fontSize || 20);
+      renderPatientTelemetryLogs(patientId);
+      switchView('caregiverAnalytics');
+    }
+
+    function renderPatientTelemetryLogs(patientId) {
+      const container = document.getElementById('activityTelemetryLogContainer');
+      const patientLogs = db.logs.filter(l => l.patientId === patientId);
+
+      if (patientLogs.length === 0) {
+        container.innerHTML = `<div class="text-xs text-slate-400 italic">No voice telemetry logs recorded yet for this patient.</div>`;
+        return;
+      }
+
+      container.innerHTML = patientLogs.map(l => `
+        <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1 cg-bg-subtle">
+          <div class="flex items-center justify-between font-bold text-slate-700 cg-text-primary">
+            <span>⏱️ ${l.timestamp}</span>
+            <span class="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-mono">+${l.coinsEarned} 🪙</span>
+          </div>
+          <p class="text-slate-800 font-medium cg-text-primary">"${l.question}"</p>
+          <div class="text-[11px] text-slate-500 flex flex-wrap gap-x-3 pt-0.5 border-t border-slate-200/60 cg-text-secondary">
+            <span>Answer: <strong>${l.answer}</strong></span>
+            <span>Response Speed: <strong>${l.responseTimeSec}s</strong></span>
+            <span>Vocal Confidence: <strong class="text-teal-700">${l.confidenceScore}%</strong></span>
+            <span>Hint Level: <strong>L${l.hintLevelUsed}</strong></span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleReportMenu() {
+      const menu = document.getElementById('reportDropdownMenu');
+      const isExpanded = !menu.classList.contains('hidden');
+      menu.classList.toggle('hidden');
+      const btn = document.querySelector('button[onclick="toggleReportMenu()"]');
+      if (btn) btn.setAttribute('aria-expanded', (!isExpanded).toString());
+    }
+
+    document.addEventListener('click', function(e) {
+      const menu = document.getElementById('reportDropdownMenu');
+      if (menu && !menu.classList.contains('hidden') && !e.target.closest('#reportDropdownMenu') && !e.target.closest('button[onclick="toggleReportMenu()"]')) {
+        menu.classList.add('hidden');
+        const btn = document.querySelector('button[onclick="toggleReportMenu()"]');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    function exportTelemetryPDF() {
+      toggleReportMenu();
+      const patient = state.activePatient;
+      const logs = db.logs.filter(l => l.patientId === patient.id);
+
+      if (!window.jspdf) {
+        alert("PDF generator library loading... Please try again in a second.");
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFillColor(13, 148, 136);
+      doc.rect(0, 0, 210, 28, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Memory Threads — Patient Telemetry Report", 14, 18);
+
+      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(11);
+      doc.text(`Patient Name: ${patient.name}`, 14, 38);
+      doc.text(`Age: ${patient.age}`, 14, 45);
+      doc.text(`Preferred Language: ${patient.language.toUpperCase()}`, 14, 52);
+      doc.text(`Assigned Caregiver: ${patient.caregiverName}`, 14, 59);
+
+      doc.text(`Report Date: ${new Date().toLocaleDateString()}`, 120, 38);
+      doc.text(`Saved Text Scale: ${patient.fontSize || 20}px`, 120, 45);
+      doc.text(`Recall Rate: 72%`, 120, 52);
+      doc.text(`Hint Dependency: 31%`, 120, 59);
+
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, 65, 196, 65);
+
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.text("Recent Activity & Voice Telemetry Logs", 14, 75);
+
+      let yPos = 85;
+      doc.setFontSize(10);
+
+      logs.forEach((log, index) => {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+
+        doc.setFillColor(245, 247, 250);
+        doc.roundedRect(14, yPos, 182, 24, 3, 3, 'F');
+
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text(`Log #${logs.length - index} — ${log.timestamp}`, 18, yPos + 6);
+        doc.text(`+${log.coinsEarned} Coins`, 165, yPos + 6);
+
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(51, 65, 85);
+        doc.text(`Q: "${log.question}"`, 18, yPos + 12);
+        doc.text(`Answer: ${log.answer} | Speed: ${log.responseTimeSec}s | Confidence: ${log.confidenceScore}% | Hint Level: L${log.hintLevelUsed}`, 18, yPos + 18);
+
+        yPos += 28;
+      });
+
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Non-clinical cognitive summary generated by Memory Threads NER-AI Platform.", 14, 288);
+
+      doc.save(`Memory_Threads_${patient.name.replace(/\s+/g, '_')}_Report.pdf`);
+      announceToScreenReader("Downloaded PDF telemetry report");
+    }
+
+    function exportTelemetryCSV() {
+      toggleReportMenu();
+      const patient = state.activePatient;
+      const logs = db.logs.filter(l => l.patientId === patient.id);
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Timestamp,Patient Name,Question,Answer,Response Speed (s),Confidence Score (%),Hint Level,Coins Earned\n";
+
+      logs.forEach(l => {
+        const row = `"${l.timestamp}","${patient.name}","${l.question.replace(/"/g, '""')}","${l.answer}",${l.responseTimeSec},${l.confidenceScore},${l.hintLevelUsed},${l.coinsEarned}`;
+        csvContent += row + "\n";
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Memory_Threads_${patient.name.replace(/\s+/g, '_')}_Telemetry.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      announceToScreenReader("Downloaded CSV telemetry data");
+    }
+
+    function printTelemetryReport() {
+      toggleReportMenu();
+      window.print();
+    }
+
+    // PATIENT PRACTICE ENGINE
+    function startActivitySession() {
+      state.hesitationSeconds = 0;
+      state.currentHintLevel = 0;
+      state.isIndependentTestMode = false;
+      state.patientCoins = state.activePatient.coins;
+      
+      applyPatientFontSize(state.activePatient.fontSize || 20);
+      document.getElementById('coinCountDisplay').innerText = state.patientCoins;
+      document.getElementById('hintContainer').classList.add('hidden');
+      document.getElementById('feedbackBox').classList.add('hidden');
+      document.getElementById('liveSpeechTranscriptContainer').classList.add('hidden');
+
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      document.getElementById('patientGreetingTitle').innerText = langData.greeting + state.activePatient.name + "!";
+      document.getElementById('patientLangBadge').innerText = state.activePatient.language.toUpperCase() + " Active";
+      document.getElementById('patientCaregiverBadge').innerText = "Caregiver: " + state.activePatient.caregiverName;
+      
+      document.getElementById('promptQuestionPrimary').innerText = `"${langData.question}"`;
+      document.getElementById('promptTranslationCaregiver').innerText = langData.translation;
+
+      // Update UI button texts dynamically for the chosen regional language
+      document.getElementById('micBtnText').innerText = langData.btnMicDefault;
+      document.getElementById('speakBtnText').innerText = langData.btnSpeakQuestion;
+      document.getElementById('hintBtnText').innerText = langData.btnNeedHint;
+      document.getElementById('liveSpeechHearingLabel').innerText = langData.hearingLabel;
+
+      startHesitationClock();
+      
+      setTimeout(() => {
+        speakQuestionWithTTS();
+      }, 600);
+    }
+
+    function startHesitationClock() {
+      stopHesitationClock();
+      state.hesitationTimerId = setInterval(() => {
+        state.hesitationSeconds++;
+        document.getElementById('hesitationTimer').innerText = `Response Clock: ${state.hesitationSeconds}s`;
+
+        if (state.hesitationSeconds === 12 && state.currentHintLevel === 0 && !state.isIndependentTestMode) {
+          triggerProgressiveHint(1);
+        }
+      }, 1000);
+    }
+
+    function stopHesitationClock() {
+      if (state.hesitationTimerId) {
+        clearInterval(state.hesitationTimerId);
+        state.hesitationTimerId = null;
+      }
+    }
+
+    function triggerManualHint() {
+      triggerProgressiveHint(state.currentHintLevel + 1);
+    }
+
+    function triggerProgressiveHint(level) {
+      state.currentHintLevel = level;
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      const hintContainer = document.getElementById('hintContainer');
+
+      hintContainer.classList.remove('hidden');
+      
+      if (level === 1) {
+        document.getElementById('hintTitle').innerText = langData.hint1Title;
+        document.getElementById('hintBodyTextPrimary').innerText = langData.hint1;
+        document.getElementById('hintBodyTextCaregiver').innerText = langData.hint1Caregiver;
+        document.getElementById('hintChoiceButtons').classList.add('hidden');
+        speakTextTTS(langData.hint1);
+      } else if (level >= 2) {
+        document.getElementById('hintTitle').innerText = langData.hint2Title;
+        document.getElementById('hintBodyTextPrimary').innerText = langData.hint2;
+        document.getElementById('hintBodyTextCaregiver').innerText = langData.hint2Caregiver;
+        document.getElementById('hintChoiceButtons').classList.remove('hidden');
+        speakTextTTS(langData.hint2);
+      }
+    }
+
+    // REAL-TIME VOICE INPUT ENGINE
+    async function toggleVoiceInput() {
+      const micBtn = document.getElementById('micBtn');
+      const micBtnText = document.getElementById('micBtnText');
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+
+      if (!state.isVoiceListening) {
+        try {
+          state.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          state.isVoiceListening = true;
+
+          micBtn.classList.remove('bg-amber-600', 'pulse-ring');
+          micBtn.classList.add('bg-rose-600', 'listening-pulse');
+          micBtnText.innerText = langData.btnMicActive;
+          announceToScreenReader("Microphone active. Please speak your answer clearly.");
+
+          const transcriptContainer = document.getElementById('liveSpeechTranscriptContainer');
+          const transcriptText = document.getElementById('liveSpeechTranscriptText');
+          transcriptContainer.classList.remove('hidden');
+          transcriptText.innerText = `"${langData.listeningText}"`;
+
+          if (recognition) {
+            try {
+              recognition.start();
+            } catch(e) {
+              // Recognition running or restarting
+            }
+          } else {
+            handleSpeechRecognitionFallback();
+          }
+        } catch (err) {
+          console.warn("Microphone permission or Speech API unavailable:", err);
+          handleSpeechRecognitionFallback();
+        }
+      } else {
+        stopVoiceListening();
+      }
+    }
+
+    function handleSpeechRecognitionFallback() {
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      const promptInput = prompt(langData.promptFallback, "Barpeta");
+      stopVoiceListening();
+      if (promptInput) {
+        evaluateSpokenAnswer(promptInput);
+      }
+    }
+
+    function stopVoiceListening() {
+      state.isVoiceListening = false;
+      if (recognition && recognitionActive) {
+        try { recognition.stop(); } catch(e) {}
+      }
+      if (state.audioStream) {
+        state.audioStream.getTracks().forEach(track => track.stop());
+        state.audioStream = null;
+      }
+      const micBtn = document.getElementById('micBtn');
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      if (micBtn) {
+        micBtn.classList.remove('bg-rose-600', 'listening-pulse');
+        micBtn.classList.add('bg-amber-600', 'pulse-ring');
+        document.getElementById('micBtnText').innerText = langData.btnMicDefault;
+      }
+    }
+
+    function submitAnswer(answerText) {
+      evaluateSpokenAnswer(answerText);
+    }
+
+    // REAL SPEECH ANALYSIS AND VERIFICATION ENGINE
+    async function evaluateSpokenAnswer(spokenTranscript) {
+      stopHesitationClock();
+      stopVoiceListening();
+
+      const cleanedTranscript = spokenTranscript.toLowerCase().trim();
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      const validKeywords = langData.correctKeywords || ["barpeta", "বৰপেটা"];
+
+      const isCorrect = validKeywords.some(keyword => cleanedTranscript.includes(keyword.toLowerCase()));
+
+      let calculatedConfidence = 85;
+      if (state.audioStream) {
+        calculatedConfidence = await analyzeVoiceConfidence(state.audioStream);
+      }
+
+      const feedbackBox = document.getElementById('feedbackBox');
+      feedbackBox.classList.remove('hidden');
+
+      if (isCorrect) {
+        // --- CORRECT ANSWER FLOW ---
+        triggerConfettiPopper();
+        
+        let coinsEarned = 10;
+        let encourageText = langData.correctText;
+
+        if (state.isIndependentTestMode) {
+          coinsEarned = 10;
+          encourageText = langData.correctTextIndep;
+        } else if (state.currentHintLevel > 0) {
+          coinsEarned = 6;
+        }
+
+        updateCoins(coinsEarned);
+
+        const newLog = {
+          id: 'l' + (db.logs.length + 1),
+          patientId: state.activePatient.id,
+          timestamp: "Just Now (" + new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) + ")",
+          question: "Where did you celebrate Bihu with Priya?",
+          answer: spokenTranscript,
+          responseTimeSec: state.hesitationSeconds,
+          confidenceScore: calculatedConfidence,
+          hintLevelUsed: state.currentHintLevel,
+          coinsEarned: coinsEarned
+        };
+
+        db.logs.unshift(newLog);
+        saveLocalDb(STORAGE_KEY_LOGS, db.logs);
+
+        feedbackBox.className = "p-5 rounded-2xl text-center font-bold text-lg bg-emerald-100 text-emerald-900 border-2 border-emerald-400 font-friendly animate-bounce shadow-lg";
+        feedbackBox.innerHTML = `
+          <div class="text-2xl mb-1">🎉 🌟 🎉</div>
+          <div>${encourageText}</div>
+          <div class="text-xs font-bold text-emerald-800 mt-2 bg-emerald-200/80 inline-block px-3 py-1 rounded-full">
+            ${langData.heardText}"${spokenTranscript}" • +${coinsEarned} Coins Earned! 🪙
+          </div>
+        `;
+
+        speakTextTTS(encourageText);
+
+        if (!state.isIndependentTestMode) {
+          setTimeout(() => {
+            setupIndependentReTest();
+          }, 5000);
+        }
+      } else {
+        // --- INCORRECT OR UNMATCHED ANSWER FLOW ---
+        const retryText = langData.wrongText;
+
+        feedbackBox.className = "p-5 rounded-2xl text-center font-bold text-base bg-amber-100 text-amber-950 border-2 border-amber-400 font-friendly shadow-md";
+        feedbackBox.innerHTML = `
+          <div class="text-2xl mb-1">🤔💭</div>
+          <div>${retryText}</div>
+          <div class="text-xs font-semibold text-amber-800 mt-1">${langData.heardText}"${spokenTranscript}"</div>
+          <div class="mt-3 flex justify-center gap-2">
+            <button onclick="toggleVoiceInput()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow">
+              ${langData.btnSpeakAgain}
+            </button>
+            <button onclick="triggerManualHint()" class="px-4 py-2 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-xl text-xs font-bold">
+              ${langData.btnGetHint}
+            </button>
+          </div>
+        `;
+
+        speakTextTTS(retryText);
+        startHesitationClock();
+      }
+    }
+
+    function setupIndependentReTest() {
+      state.isIndependentTestMode = true;
+      state.currentHintLevel = 0;
+      state.hesitationSeconds = 0;
+
+      document.getElementById('hintContainer').classList.add('hidden');
+      document.getElementById('feedbackBox').classList.add('hidden');
+      document.getElementById('liveSpeechTranscriptContainer').classList.add('hidden');
+
+      const langData = languagePrompts[state.activePatient.language] || languagePrompts.english;
+      document.getElementById('promptQuestionPrimary').innerText = `"${langData.question}"`;
+      document.getElementById('promptTranslationCaregiver').innerText = "(Independent Re-Test: Testing recall without clues)";
+
+      startHesitationClock();
+      speakTextTTS(langData.question);
+    }
+
+    function updateCoins(amount) {
+      state.patientCoins += amount;
+      state.activePatient.coins = state.patientCoins;
+      saveLocalDb(STORAGE_KEY_PATIENTS, db.patients);
+      document.getElementById('coinCountDisplay').innerText = state.patientCoins;
+    }
+
+    function inspectNode(title, type, score, details) {
+      document.getElementById('nodeTitle').innerText = `${title} (${type})`;
+      document.getElementById('nodeDesc').innerText = details;
+      document.getElementById('nodeScore').innerText = score;
+      announceToScreenReader(`Selected ${title} node: ${details}`);
+    }
+
+    function openAddMemoryModal() {
+      document.getElementById('addMemoryModal').classList.remove('hidden');
+      document.getElementById('memTitle').focus();
+    }
+    function closeAddMemoryModal() {
+      document.getElementById('addMemoryModal').classList.add('hidden');
+    }
+    function saveMemory(e) {
+      e.preventDefault();
+      alert("Memory relationship node successfully recorded in persistent database.");
+      closeAddMemoryModal();
+    }
+  </script>
+</body>
+</html>

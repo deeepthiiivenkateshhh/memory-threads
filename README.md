@@ -5,7 +5,7 @@ An AI-powered cognitive memory companion designed for North Eastern Region (NER)
 ---
 
 Live Demo:
-[https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPO-NAME/](https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPO-NAME/?utm_source=gemini)
+https://deeepthiiivenkateshhh.github.io/memory-threads/
 
 ---
 
